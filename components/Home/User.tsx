@@ -1,4 +1,5 @@
 import { useMiniAppContext } from "@/hooks/use-miniapp-context";
+import Image from 'next/image'; // Add this import
 
 export function User() {
   const { context } = useMiniAppContext();
@@ -10,7 +11,7 @@ export function User() {
         {context?.user ? (
           <>
             {context?.user?.pfpUrl && (
-              <img
+              <Image
                 src={context?.user?.pfpUrl}
                 className="w-14 h-14 rounded-full"
                 alt="User Profile Picture"
