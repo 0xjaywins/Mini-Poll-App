@@ -1,1 +1,1 @@
-# Monad Farcaster MiniApp Template
+# Monad x Farcaster Mini poll App
