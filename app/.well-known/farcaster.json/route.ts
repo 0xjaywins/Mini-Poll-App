@@ -4,10 +4,10 @@ import { APP_URL } from "../../../lib/constants";
 export async function GET() {
   const farcasterConfig = {
     accountAssociation: {
-      header: "eyJmaWQiOjE3OTc5LCJ0eXBlIjoiY3VzdG9keSIsImtleSI6IjB4MGMxNWE5QkVmRTg3RjY0N0IwMDNhMjI0MTY4NDYwMzYyODQ0M2Y4YiJ9",
-      payload: "eyJkb21haW4iOiJtaW5pLXBvbGwtYXBwLnZlcmNlbC5hcHAifQ",
-      signature: "MHgwYzY2NDdjZDhjOWJiY2JmYzg2NGIzZjVjYWVjY2ExMTdlOTY4ZGQwMWIzMmM0NGViMjU5ZDhlOGQyMzdhZTZiMDU1MmNmNWRiMDU1MDMwNTZmNTNhZmEwZDZlZTBlZmIyMmJmNDNmMDQ4NTdhMzk2NmY0YmMzODk2N2NlZDI5ZjFi"
-    },
+      "header": "eyJmaWQiOjI2MjY2MiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDAxOGI1NDc3Y2YxYWJkMWFhODBjMTViNzAyODRCNmM2OTJGNzVERDAifQ",
+    "payload": "eyJkb21haW4iOiJtaW5pLXBvbGwtYXBwLnZlcmNlbC5hcHAifQ",
+    "signature": "MHgyNmY5YzA3ZWU1YWE4YzAyZTBjNjA4ZDUwMGQ4ZmQ2OTJkYjczMjdjMGQ2N2EwYTVlNGM2NWEyZGVhNDU0YmQzMjNlZGE0MzI5OWU3MjdjMDRjMzYyZDY2NWMzNTc1YWY0MTU1NWFhY2Q4YzA0NDg0NmE4YjRlN2Y3MzhjMjIyNDFi"
+  },
     frame: {
       version: "1",
       name: "Mini Poll App",
