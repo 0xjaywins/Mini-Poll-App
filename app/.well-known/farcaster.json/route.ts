@@ -5,9 +5,9 @@ export async function GET() {
   const farcasterConfig = {
     accountAssociation: {
       "header": "eyJmaWQiOjI2MjY2MiwidHlwZSI6ImN1c3RvZHkiLCJrZXkiOiIweDAxOGI1NDc3Y2YxYWJkMWFhODBjMTViNzAyODRCNmM2OTJGNzVERDAifQ",
-    "payload": "eyJkb21haW4iOiJtaW5pLXBvbGwtYXBwLnZlcmNlbC5hcHAifQ",
-    "signature": "MHgyNmY5YzA3ZWU1YWE4YzAyZTBjNjA4ZDUwMGQ4ZmQ2OTJkYjczMjdjMGQ2N2EwYTVlNGM2NWEyZGVhNDU0YmQzMjNlZGE0MzI5OWU3MjdjMDRjMzYyZDY2NWMzNTc1YWY0MTU1NWFhY2Q4YzA0NDg0NmE4YjRlN2Y3MzhjMjIyNDFi"
-  },
+      "payload": "eyJkb21haW4iOiJtaW5pLXBvbGwtYXBwLnZlcmNlbC5hcHAifQ",
+      "signature": "MHgyNmY5YzA3ZWU1YWE4YzAyZTBjNjA4ZDUwMGQ4ZmQ2OTJkYjczMjdjMGQ2N2EwYTVlNGM2NWEyZGVhNDU0YmQzMjNlZGE0MzI5OWU3MjdjMDRjMzYyZDY2NWMzNTc1YWY0MTU1NWFhY2Q4YzA0NDg0NmE4YjRlN2Y3MzhjMjIyNDFi"
+    },
     frame: {
       version: "1",
       name: "Mini Poll App",
