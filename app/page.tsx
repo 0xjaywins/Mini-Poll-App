@@ -1,37 +1,15 @@
+// app/page.tsx
 'use client';
 
 import { useMiniAppContext } from '../hooks/use-miniapp-context';
-import { monadTestnet } from 'wagmi/chains'; // Updated import
+import { monadTestnet } from 'wagmi/chains';
 import { useAccount, useSwitchChain } from 'wagmi';
+import Poll from '../components/Home/Poll'; // Import the updated Poll component
 
 export default function Page() {
   const { context, actions } = useMiniAppContext();
   const { chainId } = useAccount();
   const { switchChain } = useSwitchChain();
-
-  const handleCatsVote = () => {
-    if (actions?.composeCast) {
-      actions.composeCast({
-        text: "I voted Cats! 🐱 #MiniPoll",
-        embeds: [],
-      });
-      console.log("Thanks for voting!");
-    } else {
-      console.log("Actions not available");
-    }
-  };
-
-  const handleDogsVote = () => {
-    if (actions?.composeCast) {
-      actions.composeCast({
-        text: "I voted Dogs! 🐶 #MiniPoll",
-        embeds: [],
-      });
-      console.log("Thanks for voting!");
-    } else {
-      console.log("Actions not available");
-    }
-  };
 
   const userName = context?.user?.displayName || "User";
   const isCorrectChain = chainId === monadTestnet.id;
@@ -56,25 +34,7 @@ export default function Page() {
               </button>
             </div>
           ) : (
-            <>
-              <h2 className="text-2xl">
-                Hey {userName}, Cats or Dogs?
-              </h2>
-              <div className="space-x-4">
-                <button
-                  className="px-4 py-2 text-lg bg-gray-600 text-white rounded hover:bg-gray-500 transition"
-                  onClick={handleCatsVote}
-                >
-                  Cats 🐱
-                </button>
-                <button
-                  className="px-4 py-2 text-lg bg-gray-600 text-white rounded hover:bg-gray-500 transition"
-                  onClick={handleDogsVote}
-                >
-                  Dogs 🐶
-                </button>
-              </div>
-            </>
+            <Poll userName={userName} /> // Render the updated Poll component
           )}
         </div>
       </div>
