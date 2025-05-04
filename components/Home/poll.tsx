@@ -1,17 +1,102 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMiniAppContext } from "../../hooks/use-miniapp-context";
 import { dApps, tokens, nfts, comparisonQuestions } from "../../lib/monadEcosystem";
+import { getContract } from "../../utils/contract";
+import { ethers } from "ethers"; // Import ethers for type definitions
 
 interface PollItem {
   name: string;
   description: string;
 }
 
+// Define the type for the Ethereum provider (MetaMask)
+interface EthereumProvider {
+  request: (args: { method: string; params?: any[] }) => Promise<any>;
+  on: (event: string, listener: (...args: any[]) => void) => void;
+  removeListener: (event: string, listener: (...args: any[]) => void) => void;
+}
+
+declare global {
+  interface Window {
+    ethereum?: EthereumProvider;
+  }
+}
+
+const MONAD_TESTNET_CHAIN_ID = "0x27cf"; // Chain ID 10143 in hex
+
 export default function Poll({ userName }: { userName: string }) {
   const { actions } = useMiniAppContext();
   const [pollItems, setPollItems] = useState<PollItem[]>([]);
   const [question, setQuestion] = useState<string>("");
-  const [showFeedback, setShowFeedback] = useState(false);
+  const [showFeedback, setShowFeedback] = useState<boolean>(false);
+  const [contract, setContract] = useState<ethers.Contract | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
+  const [networkError, setNetworkError] = useState<string | null>(null);
+
+  // Check and switch network
+  const checkNetwork = async (): Promise<boolean> => {
+    if (!window.ethereum) {
+      setNetworkError("Please install MetaMask!");
+      return false;
+    }
+
+    try {
+      const chainId = await window.ethereum.request({ method: "eth_chainId" });
+      if (chainId !== MONAD_TESTNET_CHAIN_ID) {
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: MONAD_TESTNET_CHAIN_ID }],
+          });
+        } catch (switchError: any) {
+          // If the network isn't added to MetaMask, add it
+          if (switchError.code === 4902) {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [
+                {
+                  chainId: MONAD_TESTNET_CHAIN_ID,
+                  chainName: "Monad Testnet",
+                  rpcUrls: ["https://testnet-rpc.monad.xyz"],
+                  nativeCurrency: {
+                    name: "MON",
+                    symbol: "MON",
+                    decimals: 18,
+                  },
+                  blockExplorerUrls: ["https://testnet.monadexplorer.com"],
+                },
+              ],
+            });
+          } else {
+            setNetworkError("Please switch to the Monad Testnet in MetaMask.");
+            return false;
+          }
+        }
+      }
+      return true;
+    } catch (error) {
+      setNetworkError("Error checking network: " + (error as Error).message);
+      return false;
+    }
+  };
+
+  // Initialize the contract
+  useEffect(() => {
+    const initContract = async () => {
+      try {
+        const isNetworkCorrect = await checkNetwork();
+        if (!isNetworkCorrect) return;
+
+        const contractInstance = await getContract();
+        setContract(contractInstance);
+      } catch (error) {
+        console.error("Error initializing contract:", error);
+        setError("Failed to initialize contract. Please refresh and try again.");
+      }
+    };
+    initContract();
+  }, []);
 
   // Function to generate a new poll
   const generatePoll = useCallback(() => {
@@ -33,6 +118,7 @@ export default function Poll({ userName }: { userName: string }) {
     setPollItems(twoItems);
     setQuestion(selectedQuestion);
     setShowFeedback(false); // Reset feedback state
+    setError(null); // Clear any previous errors
   }, []);
 
   // Initial poll generation
@@ -40,22 +126,45 @@ export default function Poll({ userName }: { userName: string }) {
     generatePoll();
   }, [generatePoll]);
 
-  const handleVote = (item: string) => {
-    if (actions?.composeCast) {
-      actions.composeCast({
-        text: `I voted for ${item}! #MiniPoll`,
-        embeds: [],
-      });
-      console.log("Thanks for voting!");
-    } else {
-      console.log("Actions not available");
+  // Handle vote casting
+  const handleVote = async (item: string) => {
+    if (!contract) {
+      setError("Contract not initialized. Please refresh and try again.");
+      return;
     }
 
-    // Show feedback and then generate a new poll
-    setShowFeedback(true);
-    setTimeout(() => {
-      generatePoll();
-    }, 1000); // Show feedback for 1 second
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Record the vote on the blockchain
+      const tx = await contract.castVote(item);
+      console.log("Transaction sent:", tx.hash);
+      await tx.wait();
+      console.log("Transaction confirmed:", tx.hash);
+
+      // Post the vote to Warpcast
+      if (actions?.composeCast) {
+        actions.composeCast({
+          text: `I voted for ${item}! #MiniPoll`,
+          embeds: [],
+        });
+        console.log("Thanks for voting!");
+      } else {
+        console.log("Actions not available");
+      }
+
+      // Show feedback and then generate a new poll
+      setShowFeedback(true);
+      setTimeout(() => {
+        generatePoll();
+      }, 1000); // Show feedback for 1 second
+    } catch (error: any) {
+      console.error("Error casting vote:", error);
+      setError(`Failed to cast vote: ${error.message}`);
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (!pollItems.length && !showFeedback) {
@@ -75,17 +184,22 @@ export default function Poll({ userName }: { userName: string }) {
       <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
         Hey {userName}, {question}
       </h2>
+      {networkError && <p className="text-red-500 text-center mb-4">{networkError}</p>}
+      {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+      {loading && <p className="text-blue-500 text-center mb-4">Waiting for transaction confirmation...</p>}
       <div className="space-y-4">
         <button
-          className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start"
+          className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[0].name)}
+          disabled={loading || !!networkError}
         >
           <span className="text-lg font-medium">{pollItems[0].name}</span>
           <span className="text-sm text-gray-100">{pollItems[0].description}</span>
         </button>
         <button
-          className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start"
+          className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[1].name)}
+          disabled={loading || !!networkError}
         >
           <span className="text-lg font-medium">{pollItems[1].name}</span>
           <span className="text-sm text-gray-100">{pollItems[1].description}</span>
