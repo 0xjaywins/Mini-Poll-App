@@ -9,8 +9,8 @@ interface PollItem {
   description: string;
 }
 
-// Define the type for the Ethereum provider (EIP-1193 compliant)
-interface EVMProvider {
+// Define the type for the Ethereum provider (MetaMask)
+interface EthereumProvider {
   request: (args: { method: string; params?: any[] }) => Promise<any>;
   on: (event: string, listener: (...args: any[]) => void) => void;
   removeListener: (event: string, listener: (...args: any[]) => void) => void;
@@ -18,7 +18,7 @@ interface EVMProvider {
 
 declare global {
   interface Window {
-    ethereum?: EVMProvider;
+    ethereum?: EthereumProvider;
   }
 }
 
@@ -33,25 +33,15 @@ export default function Poll({ userName }: { userName: string }) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
-  const [isWalletConnected, setIsWalletConnected] = useState<boolean>(false);
 
   // Check and switch network
   const checkNetwork = async (): Promise<boolean> => {
     if (!window.ethereum) {
-      setNetworkError("Please connect an EVM-compatible wallet (e.g., MetaMask, Coinbase Wallet).");
+      setNetworkError("Please install MetaMask!");
       return false;
     }
 
     try {
-      // Check if wallet is already connected
-      const accounts = await window.ethereum.request({ method: "eth_accounts" });
-      if (accounts.length === 0) {
-        // Prompt the user to connect their wallet
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-      }
-      setIsWalletConnected(true);
-
-      // Check the current network
       const chainId = await window.ethereum.request({ method: "eth_chainId" });
       if (chainId !== MONAD_TESTNET_CHAIN_ID) {
         try {
@@ -60,7 +50,7 @@ export default function Poll({ userName }: { userName: string }) {
             params: [{ chainId: MONAD_TESTNET_CHAIN_ID }],
           });
         } catch (switchError: any) {
-          // If the network isn't added to the wallet, add it
+          // If the network isn't added to MetaMask, add it
           if (switchError.code === 4902) {
             await window.ethereum.request({
               method: "wallet_addEthereumChain",
@@ -79,7 +69,7 @@ export default function Poll({ userName }: { userName: string }) {
               ],
             });
           } else {
-            setNetworkError("Please switch to the Monad Testnet in your wallet.");
+            setNetworkError("Please switch to the Monad Testnet in MetaMask.");
             return false;
           }
         }
@@ -177,22 +167,6 @@ export default function Poll({ userName }: { userName: string }) {
     }
   };
 
-  // Handle wallet connection
-  const connectWallet = async () => {
-    if (!window.ethereum) {
-      setNetworkError("Please connect an EVM-compatible wallet (e.g., MetaMask, Coinbase Wallet).");
-      return;
-    }
-
-    try {
-      await window.ethereum.request({ method: "eth_requestAccounts" });
-      setIsWalletConnected(true);
-      await checkNetwork(); // Re-check network after connecting
-    } catch (error) {
-      setNetworkError("Failed to connect wallet: " + (error as Error).message);
-    }
-  };
-
   if (!pollItems.length && !showFeedback) {
     return <div className="text-center text-gray-500">Loading poll...</div>;
   }
@@ -213,21 +187,11 @@ export default function Poll({ userName }: { userName: string }) {
       {networkError && <p className="text-red-500 text-center mb-4">{networkError}</p>}
       {error && <p className="text-red-500 text-center mb-4">{error}</p>}
       {loading && <p className="text-blue-500 text-center mb-4">Waiting for transaction confirmation...</p>}
-      {!isWalletConnected && (
-        <div className="text-center mb-4">
-          <button
-            className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
-            onClick={connectWallet}
-          >
-            Connect Wallet
-          </button>
-        </div>
-      )}
       <div className="space-y-4">
         <button
           className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[0].name)}
-          disabled={loading || !!networkError || !isWalletConnected}
+          disabled={loading || !!networkError}
         >
           <span className="text-lg font-medium">{pollItems[0].name}</span>
           <span className="text-sm text-gray-100">{pollItems[0].description}</span>
@@ -235,7 +199,7 @@ export default function Poll({ userName }: { userName: string }) {
         <button
           className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[1].name)}
-          disabled={loading || !!networkError || !isWalletConnected}
+          disabled={loading || !!networkError}
         >
           <span className="text-lg font-medium">{pollItems[1].name}</span>
           <span className="text-sm text-gray-100">{pollItems[1].description}</span>
