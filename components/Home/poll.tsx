@@ -56,7 +56,7 @@ export default function Poll({ userName }: { userName: string }) {
               method: "wallet_addEthereumChain",
               params: [
                 {
-                  chainId: MONAD_TESTNET_CHAIN_ID,
+                  chainId: 10143,
                   chainName: "Monad Testnet",
                   rpcUrls: ["https://testnet-rpc.monad.xyz"],
                   nativeCurrency: {
