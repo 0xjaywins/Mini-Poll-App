@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import React, { memo, useState, useEffect, useCallback } from "react";
 import { useMiniAppContext } from "../../hooks/use-miniapp-context";
 import { dApps, comparisonQuestions } from "../../lib/monadEcosystem";
 import { getContract } from "../../utils/contract";
@@ -15,7 +15,7 @@ import { injected, coinbaseWallet } from "@wagmi/connectors";
 import { http } from "viem";
 import { motion, AnimatePresence } from "framer-motion";
 import Confetti from "react-confetti";
-import Image from "next/image"; // Import Image component
+import Image from "next/image";
 
 // Monad Testnet chain configuration
 const monadTestnet = {
@@ -64,7 +64,16 @@ interface WalletOption {
 
 const MONAD_TESTNET_CHAIN_ID = 10143;
 
-export default function Poll({ userName }: { userName: string }) {
+// Move supportedWallets outside the component to prevent re-creation on every render
+const supportedWallets: WalletOption[] = [
+  { id: "metamask", name: "MetaMask", connector: injected({ target: "metaMask" }), isDetected: false },
+  { id: "trustwallet", name: "Trust Wallet", connector: injected({ target: "trustWallet" }), isDetected: false },
+  { id: "coinbase", name: "Coinbase Wallet", connector: coinbaseWallet({ appName: "MiniPoll" }), isDetected: false },
+  { id: "other", name: "Other Injected Wallet", connector: injected(), isDetected: false },
+];
+
+const Poll = memo(({ userName }: { userName: string }) => {
+  console.log("Poll component rendered at:", new Date().toISOString());
   const { actions, user } = useMiniAppContext();
 
   const [pollItems, setPollItems] = useState<PollItem[]>([]);
@@ -90,14 +99,6 @@ export default function Poll({ userName }: { userName: string }) {
     console.log("Warpcast User Data:", user);
   }, [user]);
 
-  // Define supported wallets
-  const supportedWallets: WalletOption[] = [
-    { id: "metamask", name: "MetaMask", connector: injected({ target: "metaMask" }), isDetected: false },
-    { id: "trustwallet", name: "Trust Wallet", connector: injected({ target: "trustWallet" }), isDetected: false },
-    { id: "coinbase", name: "Coinbase Wallet", connector: coinbaseWallet({ appName: "MiniPoll" }), isDetected: false },
-    { id: "other", name: "Other Injected Wallet", connector: injected(), isDetected: false },
-  ];
-
   // Detect available wallets
   const detectWallets = useCallback(() => {
     console.log("Detecting wallets, window.ethereum:", !!window.ethereum);
@@ -122,7 +123,7 @@ export default function Poll({ userName }: { userName: string }) {
     });
     console.log("Detected wallets:", updatedWallets);
     setWalletOptions(updatedWallets);
-  }, [supportedWallets]); // Add supportedWallets to dependency array
+  }, []); // No dependencies since supportedWallets is now a constant
 
   useEffect(() => {
     detectWallets();
@@ -212,13 +213,12 @@ export default function Poll({ userName }: { userName: string }) {
     }
   }, [isWalletConnected, initContract]);
 
-  // Fetch vote counts
+  // Fetch vote counts without debouncing
   const fetchVoteCounts = useCallback(async () => {
     if (!contract || !pollItems.length) {
       console.log("Cannot fetch vote counts: contract or pollItems not ready.");
       return;
     }
-
     setIsLoadingVotes(true);
     try {
       console.log("Fetching vote counts for:", pollItems.map((item) => item.name));
@@ -248,7 +248,7 @@ export default function Poll({ userName }: { userName: string }) {
 
   // Generate a new poll
   const generatePoll = useCallback(() => {
-    console.log("Generating new poll...");
+    console.log("Generating poll at:", new Date().toISOString());
     const categories = [dApps];
     const selectedCategory = categories[0];
     const shuffledItems = [...selectedCategory].sort(() => Math.random() - 0.5);
@@ -267,7 +267,13 @@ export default function Poll({ userName }: { userName: string }) {
   }, [fetchVoteCounts]);
 
   useEffect(() => {
-    generatePoll();
+    let isMounted = true;
+    if (isMounted) {
+      generatePoll();
+    }
+    return () => {
+      isMounted = false;
+    };
   }, [generatePoll]);
 
   // Handle wallet connection
@@ -411,10 +417,10 @@ export default function Poll({ userName }: { userName: string }) {
       <AnimatePresence mode="wait">
         <motion.div
           key={question}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.5 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: 0.3 }}
         >
           <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
             Hey {user?.displayName || userName}, {question}
@@ -445,7 +451,6 @@ export default function Poll({ userName }: { userName: string }) {
           <div className="text-center mb-4">
             {isWalletConnected ? (
               <div className="flex flex-col items-center">
-                {/* Warpcast User Details with Fallbacks */}
                 {user?.pfp ? (
                   <Image
                     src={user.pfp}
@@ -453,7 +458,7 @@ export default function Poll({ userName }: { userName: string }) {
                     className="w-12 h-12 rounded-full mb-2 border-2 border-blue-500"
                     width={48}
                     height={48}
-                    onError={(e) => (e.currentTarget.src = "https://via.placeholder.com/48")} // Fallback image
+                    onError={(e) => (e.currentTarget.src = "https://via.placeholder.com/48")}
                   />
                 ) : (
                   <Image
@@ -483,7 +488,7 @@ export default function Poll({ userName }: { userName: string }) {
                 className={`p-2 rounded-lg text-white transition-all duration-200 shadow-md ${
                   isConnecting
                     ? "bg-gray-400 cursor-not-allowed"
-                    : "bg-green-500 hover:bg-green-600"
+                    : "bg-green-600 hover:bg-green-600"
                 }`}
                 onClick={() => setShowWalletModal(true)}
                 disabled={isConnecting}
@@ -566,4 +571,9 @@ export default function Poll({ userName }: { userName: string }) {
       </AnimatePresence>
     </div>
   );
-}
+});
+
+// Set display name for the memoized component
+Poll.displayName = "Poll";
+
+export default Poll;
