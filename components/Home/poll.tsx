@@ -75,6 +75,7 @@ export default function Poll({ userName }: { userName: string }) {
   const [walletOptions, setWalletOptions] = useState<WalletOption[]>([]);
   const [account, setAccount] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState<number>(0);
 
   // Define supported wallets
   const supportedWallets: WalletOption[] = [
@@ -174,30 +175,43 @@ export default function Poll({ userName }: { userName: string }) {
     }
   };
 
-  // Initialize the contract
-  useEffect(() => {
-    const initContract = async () => {
-      try {
-        console.log("Initializing contract...");
-        const isNetworkCorrect = await checkNetworkAndAccount();
-        console.log("Network correct:", isNetworkCorrect);
-        if (!isNetworkCorrect) {
-          console.error("Network check failed. Wallet not connected or wrong network.");
-          setError("Please connect your wallet to Monad Testnet and try again.");
-          return;
-        }
+  // Initialize the contract with retry mechanism
+  const initContract = useCallback(async () => {
+    if (retryCount >= 3) {
+      console.error("Max retries reached for contract initialization.");
+      setError("Failed to initialize contract after multiple attempts. Please ensure your wallet is connected to Monad Testnet and try again.");
+      return;
+    }
 
-        console.log("Calling getContract...");
-        const contractInstance = await getContract();
-        console.log("Contract initialized:", contractInstance.address);
-        setContract(contractInstance);
-      } catch (error: any) {
-        console.error("Error initializing contract:", error.message, error);
-        setError(`Failed to initialize contract: ${error.message}. Please refresh and try again.`);
+    try {
+      console.log("Initializing contract, attempt:", retryCount + 1);
+      const isNetworkCorrect = await checkNetworkAndAccount();
+      console.log("Network correct:", isNetworkCorrect);
+      if (!isNetworkCorrect) {
+        console.error("Network check failed. Wallet not connected or wrong network.");
+        setError("Please connect your wallet to Monad Testnet and try again.");
+        setRetryCount((prev) => prev + 1);
+        return;
       }
-    };
-    initContract();
-  }, []);
+
+      console.log("Calling getContract...");
+      const contractInstance = await getContract();
+      console.log("Contract initialized:", contractInstance.address);
+      setContract(contractInstance);
+      setRetryCount(0); // Reset retry count on success
+    } catch (error: any) {
+      console.error("Error initializing contract:", error.message, error);
+      setError(`Failed to initialize contract: ${error.message}. Retrying...`);
+      setRetryCount((prev) => prev + 1);
+    }
+  }, [retryCount]);
+
+  // Run initContract on mount and when wallet connects
+  useEffect(() => {
+    if (isWalletConnected) {
+      initContract();
+    }
+  }, [isWalletConnected, initContract]);
 
   // Generate a new poll
   const generatePoll = useCallback(() => {
@@ -253,6 +267,7 @@ export default function Poll({ userName }: { userName: string }) {
       setBalance(null);
       setContract(null);
       setNetworkError(null);
+      setRetryCount(0);
       console.log("Wallet disconnected.");
     } catch (error: any) {
       console.error("Disconnect error:", error);
@@ -301,6 +316,14 @@ export default function Poll({ userName }: { userName: string }) {
     }
   };
 
+  // Manual retry for contract initialization
+  const handleRetry = () => {
+    console.log("Retrying contract initialization...");
+    setError(null);
+    setRetryCount(0);
+    initContract();
+  };
+
   if (!pollItems.length && !showFeedback) {
     return <div className="text-center text-gray-500">Loading poll...</div>;
   }
@@ -319,7 +342,19 @@ export default function Poll({ userName }: { userName: string }) {
         Hey {userName}, {question}
       </h2>
       {networkError && <p className="text-red-500 text-center mb-4">{networkError}</p>}
-      {error && <p className="text-red-500 text-center mb-4">{error}</p>}
+      {error && (
+        <div className="text-center mb-4">
+          <p className="text-red-500">{error}</p>
+          {retryCount < 3 && (
+            <button
+              className="mt-2 p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200"
+              onClick={handleRetry}
+            >
+              Retry
+            </button>
+          )}
+        </div>
+      )}
       {loading && <p className="text-blue-500 text-center mb-4">Waiting for transaction confirmation...</p>}
       <div className="text-center mb-4">
         {isWalletConnected ? (
@@ -376,7 +411,7 @@ export default function Poll({ userName }: { userName: string }) {
         <button
           className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[0].name)}
-          disabled={loading || !!networkError || !isWalletConnected}
+          disabled={loading || !!networkError || !isWalletConnected || !contract}
         >
           <span className="text-lg font-medium">{pollItems[0].name}</span>
           <span className="text-sm text-gray-100">{pollItems[0].description}</span>
@@ -384,7 +419,7 @@ export default function Poll({ userName }: { userName: string }) {
         <button
           className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[1].name)}
-          disabled={loading || !!networkError || !isWalletConnected}
+          disabled={loading || !!networkError || !isWalletConnected || !contract}
         >
           <span className="text-lg font-medium">{pollItems[1].name}</span>
           <span className="text-sm text-gray-100">{pollItems[1].description}</span>
