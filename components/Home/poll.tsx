@@ -2,27 +2,64 @@ import { useState, useEffect, useCallback } from "react";
 import { useMiniAppContext } from "../../hooks/use-miniapp-context";
 import { dApps, tokens, nfts, comparisonQuestions } from "../../lib/monadEcosystem";
 import { getContract } from "../../utils/contract";
-import { ethers } from "ethers"; // Import ethers for type definitions
+import { ethers } from "ethers";
+import {
+  createConfig,
+  connect,
+  disconnect,
+  getAccount,
+  switchChain,
+  fetchBalance,
+} from "@wagmi/core";
+import { injected, coinbaseWallet } from "@wagmi/connectors";
+import { http } from "viem";
+
+// Monad Testnet chain configuration
+const monadTestnet = {
+  id: 10143,
+  name: "Monad Testnet",
+  network: "monad-testnet",
+  nativeCurrency: {
+    name: "MON",
+    symbol: "MON",
+    decimals: 18,
+  },
+  rpcUrls: {
+    default: { http: ["https://testnet-rpc.monad.xyz"] },
+    public: { http: ["https://testnet-rpc.monad.xyz"] },
+  },
+  blockExplorers: {
+    default: { name: "Monad Explorer", url: "https://testnet.monadexplorer.com" },
+  },
+};
+
+// Wagmi configuration
+const config = createConfig({
+  chains: [monadTestnet],
+  connectors: [
+    injected({ target: "metaMask" }), // MetaMask
+    injected({ target: "trustWallet" }), // Trust Wallet
+    coinbaseWallet({ appName: "MiniPoll" }), // Coinbase Wallet
+    injected(), // Generic injected provider for other EVM wallets
+  ],
+  transports: {
+    [monadTestnet.id]: http("https://testnet-rpc.monad.xyz"),
+  },
+});
 
 interface PollItem {
   name: string;
   description: string;
 }
 
-// Define the type for the Ethereum provider (MetaMask)
-interface EthereumProvider {
-  request: (args: { method: string; params?: any[] }) => Promise<any>;
-  on: (event: string, listener: (...args: any[]) => void) => void;
-  removeListener: (event: string, listener: (...args: any[]) => void) => void;
+interface WalletOption {
+  id: string;
+  name: string;
+  connector: any; // Wagmi connector instance
+  isDetected: boolean;
 }
 
-declare global {
-  interface Window {
-    ethereum?: EthereumProvider;
-  }
-}
-
-const MONAD_TESTNET_CHAIN_ID = "0x27cf"; // Chain ID 10143 in hex
+const MONAD_TESTNET_CHAIN_ID = 10143;
 
 export default function Poll({ userName }: { userName: string }) {
   const { actions } = useMiniAppContext();
@@ -33,50 +70,94 @@ export default function Poll({ userName }: { userName: string }) {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [networkError, setNetworkError] = useState<string | null>(null);
+  const [isWalletConnected, setIsWalletConnected] = useState<boolean>(false);
+  const [showWalletModal, setShowWalletModal] = useState<boolean>(false);
+  const [walletOptions, setWalletOptions] = useState<WalletOption[]>([]);
+  const [account, setAccount] = useState<string | null>(null);
+  const [balance, setBalance] = useState<string | null>(null);
 
-  // Check and switch network
-  const checkNetwork = async (): Promise<boolean> => {
-    if (!window.ethereum) {
-      setNetworkError("Please install MetaMask!");
-      return false;
-    }
+  // Define supported wallets
+  const supportedWallets: WalletOption[] = [
+    {
+      id: "metamask",
+      name: "MetaMask",
+      connector: injected({ target: "metaMask" }),
+      isDetected: false,
+    },
+    {
+      id: "trustwallet",
+      name: "Trust Wallet",
+      connector: injected({ target: "trustWallet" }),
+      isDetected: false,
+    },
+    {
+      id: "coinbase",
+      name: "Coinbase Wallet",
+      connector: coinbaseWallet({ appName: "MiniPoll" }),
+      isDetected: false,
+    },
+    {
+      id: "other",
+      name: "Other Injected Wallet",
+      connector: injected(),
+      isDetected: false,
+    },
+  ];
 
+  // Detect available wallets
+  const detectWallets = useCallback(() => {
+    const updatedWallets = supportedWallets.map((wallet) => ({
+      ...wallet,
+      isDetected:
+        (wallet.id === "metamask" && Boolean(window.ethereum?.isMetaMask)) ||
+        (wallet.id === "trustwallet" && Boolean(window.ethereum?.isTrust)) ||
+        (wallet.id === "coinbase" && Boolean(window.ethereum?.isCoinbaseWallet)) ||
+        (wallet.id === "other" &&
+          Boolean(window.ethereum && !window.ethereum.isMetaMask && !window.ethereum.isTrust && !window.ethereum.isCoinbaseWallet)),
+    }));
+    setWalletOptions(updatedWallets);
+  }, []);
+
+  // Initialize wallet detection
+  useEffect(() => {
+    detectWallets();
+  }, [detectWallets]);
+
+  // Check network and account
+  const checkNetworkAndAccount = async () => {
     try {
-      const chainId = await window.ethereum.request({ method: "eth_chainId" });
-      if (chainId !== MONAD_TESTNET_CHAIN_ID) {
+      const accountData = getAccount(config);
+      const { address, isConnected } = accountData;
+      if (!isConnected || !address) {
+        setIsWalletConnected(false);
+        setAccount(null);
+        setBalance(null);
+        return false;
+      }
+
+      setIsWalletConnected(true);
+      setAccount(address);
+
+      // Fetch balance
+      const balanceData = await fetchBalance(config, {
+        address: address as `0x${string}`,
+        chainId: MONAD_TESTNET_CHAIN_ID,
+      });
+      setBalance(ethers.formatEther(balanceData.value));
+
+      // Check network
+      const currentChainId = accountData.chainId;
+      if (currentChainId !== MONAD_TESTNET_CHAIN_ID) {
         try {
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: MONAD_TESTNET_CHAIN_ID }],
-          });
+          await switchChain(config, { chainId: MONAD_TESTNET_CHAIN_ID });
         } catch (switchError: any) {
-          // If the network isn't added to MetaMask, add it
-          if (switchError.code === 4902) {
-            await window.ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [
-                {
-                  chainId: 10143,
-                  chainName: "Monad Testnet",
-                  rpcUrls: ["https://testnet-rpc.monad.xyz"],
-                  nativeCurrency: {
-                    name: "MON",
-                    symbol: "MON",
-                    decimals: 18,
-                  },
-                  blockExplorerUrls: ["https://testnet.monadexplorer.com"],
-                },
-              ],
-            });
-          } else {
-            setNetworkError("Please switch to the Monad Testnet in MetaMask.");
-            return false;
-          }
+          setNetworkError("Please switch to the Monad Testnet in your wallet.");
+          return false;
         }
       }
       return true;
-    } catch (error) {
-      setNetworkError("Error checking network: " + (error as Error).message);
+    } catch (error: any) {
+      setNetworkError("Error checking network: " + error.message);
       return false;
     }
   };
@@ -85,12 +166,12 @@ export default function Poll({ userName }: { userName: string }) {
   useEffect(() => {
     const initContract = async () => {
       try {
-        const isNetworkCorrect = await checkNetwork();
+        const isNetworkCorrect = await checkNetworkAndAccount();
         if (!isNetworkCorrect) return;
 
         const contractInstance = await getContract();
         setContract(contractInstance);
-      } catch (error) {
+      } catch (error: any) {
         console.error("Error initializing contract:", error);
         setError("Failed to initialize contract. Please refresh and try again.");
       }
@@ -98,7 +179,7 @@ export default function Poll({ userName }: { userName: string }) {
     initContract();
   }, []);
 
-  // Function to generate a new poll
+  // Generate a new poll
   const generatePoll = useCallback(() => {
     const categories = [dApps, tokens, nfts];
     const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
@@ -117,14 +198,39 @@ export default function Poll({ userName }: { userName: string }) {
 
     setPollItems(twoItems);
     setQuestion(selectedQuestion);
-    setShowFeedback(false); // Reset feedback state
-    setError(null); // Clear any previous errors
+    setShowFeedback(false);
+    setError(null);
   }, []);
 
   // Initial poll generation
   useEffect(() => {
     generatePoll();
   }, [generatePoll]);
+
+  // Handle wallet connection
+  const connectWallet = async (wallet: WalletOption) => {
+    try {
+      await connect(config, { connector: wallet.connector });
+      setShowWalletModal(false);
+      await checkNetworkAndAccount();
+    } catch (error: any) {
+      setNetworkError(`Failed to connect with ${wallet.name}: ${error.message}`);
+    }
+  };
+
+  // Handle wallet disconnection
+  const disconnectWallet = async () => {
+    try {
+      await disconnect(config);
+      setIsWalletConnected(false);
+      setAccount(null);
+      setBalance(null);
+      setContract(null);
+      setNetworkError(null);
+    } catch (error: any) {
+      setError("Failed to disconnect wallet: " + error.message);
+    }
+  };
 
   // Handle vote casting
   const handleVote = async (item: string) => {
@@ -137,13 +243,11 @@ export default function Poll({ userName }: { userName: string }) {
     setError(null);
 
     try {
-      // Record the vote on the blockchain
       const tx = await contract.castVote(item);
       console.log("Transaction sent:", tx.hash);
       await tx.wait();
       console.log("Transaction confirmed:", tx.hash);
 
-      // Post the vote to Warpcast
       if (actions?.composeCast) {
         actions.composeCast({
           text: `I voted for ${item}! #MiniPoll`,
@@ -154,11 +258,10 @@ export default function Poll({ userName }: { userName: string }) {
         console.log("Actions not available");
       }
 
-      // Show feedback and then generate a new poll
       setShowFeedback(true);
       setTimeout(() => {
         generatePoll();
-      }, 1000); // Show feedback for 1 second
+      }, 1000);
     } catch (error: any) {
       console.error("Error casting vote:", error);
       setError(`Failed to cast vote: ${error.message}`);
@@ -187,11 +290,62 @@ export default function Poll({ userName }: { userName: string }) {
       {networkError && <p className="text-red-500 text-center mb-4">{networkError}</p>}
       {error && <p className="text-red-500 text-center mb-4">{error}</p>}
       {loading && <p className="text-blue-500 text-center mb-4">Waiting for transaction confirmation...</p>}
+      <div className="text-center mb-4">
+        {isWalletConnected ? (
+          <div>
+            <p className="text-sm text-gray-600">
+              Connected: {account?.slice(0, 6)}...{account?.slice(-4)}
+            </p>
+            <p className="text-sm text-gray-600">Balance: {balance ? `${balance} MON` : "Loading..."}</p>
+            <button
+              className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all duration-200 mt-2"
+              onClick={disconnectWallet}
+            >
+              Disconnect Wallet
+            </button>
+          </div>
+        ) : (
+          <button
+            className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
+            onClick={() => setShowWalletModal(true)}
+          >
+            Connect Wallet
+          </button>
+        )}
+      </div>
+      {showWalletModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
+          <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full">
+            <h3 className="text-lg font-semibold mb-4">Select Wallet</h3>
+            <div className="space-y-2">
+              {walletOptions.map((wallet) => (
+                <button
+                  key={wallet.id}
+                  className={`w-full p-2 rounded-lg text-white transition-all duration-200 ${
+                    wallet.isDetected
+                      ? "bg-blue-500 hover:bg-blue-600"
+                      : "bg-gray-400 hover:bg-gray-500"
+                  }`}
+                  onClick={() => connectWallet(wallet)}
+                >
+                  {wallet.name} {wallet.isDetected ? "(Detected)" : ""}
+                </button>
+              ))}
+            </div>
+            <button
+              className="mt-4 p-2 bg-gray-300 text-black rounded-lg w-full"
+              onClick={() => setShowWalletModal(false)}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
       <div className="space-y-4">
         <button
           className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[0].name)}
-          disabled={loading || !!networkError}
+          disabled={loading || !!networkError || !isWalletConnected}
         >
           <span className="text-lg font-medium">{pollItems[0].name}</span>
           <span className="text-sm text-gray-100">{pollItems[0].description}</span>
@@ -199,7 +353,7 @@ export default function Poll({ userName }: { userName: string }) {
         <button
           className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
           onClick={() => handleVote(pollItems[1].name)}
-          disabled={loading || !!networkError}
+          disabled={loading || !!networkError || !isWalletConnected}
         >
           <span className="text-lg font-medium">{pollItems[1].name}</span>
           <span className="text-sm text-gray-100">{pollItems[1].description}</span>
