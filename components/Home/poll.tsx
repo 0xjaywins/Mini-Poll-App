@@ -76,6 +76,7 @@ export default function Poll({ userName }: { userName: string }) {
   const [account, setAccount] = useState<string | null>(null);
   const [balance, setBalance] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState<number>(0);
+  const [isConnecting, setIsConnecting] = useState<boolean>(false); // New state for connection loading
 
   // Define supported wallets
   const supportedWallets: WalletOption[] = [
@@ -108,15 +109,25 @@ export default function Poll({ userName }: { userName: string }) {
   // Detect available wallets
   const detectWallets = useCallback(() => {
     console.log("Detecting wallets, window.ethereum:", !!window.ethereum);
-    const updatedWallets = supportedWallets.map((wallet) => ({
-      ...wallet,
-      isDetected:
-        (wallet.id === "metamask" && Boolean(window.ethereum?.isMetaMask)) ||
-        (wallet.id === "trustwallet" && Boolean(window.ethereum?.isTrust)) ||
-        (wallet.id === "coinbase" && Boolean(window.ethereum?.isCoinbaseWallet)) ||
-        (wallet.id === "other" &&
-          Boolean(window.ethereum && !window.ethereum.isMetaMask && !window.ethereum.isTrust && !window.ethereum.isCoinbaseWallet)),
-    }));
+    const updatedWallets = supportedWallets.map((wallet) => {
+      let isDetected = false;
+      if (wallet.id === "metamask") {
+        isDetected = Boolean(window.ethereum?.isMetaMask);
+      } else if (wallet.id === "trustwallet") {
+        isDetected = Boolean(window.ethereum?.isTrust);
+      } else if (wallet.id === "coinbase") {
+        isDetected = Boolean(window.ethereum?.isCoinbaseWallet);
+      } else if (wallet.id === "other") {
+        isDetected = Boolean(
+          window.ethereum &&
+            !window.ethereum.isMetaMask &&
+            !window.ethereum.isTrust &&
+            !window.ethereum.isCoinbaseWallet &&
+            !window.ethereum.isRabby // Exclude unsupported wallets like Rabby
+        );
+      }
+      return { ...wallet, isDetected };
+    });
     console.log("Detected wallets:", updatedWallets);
     setWalletOptions(updatedWallets);
   }, []);
@@ -243,17 +254,50 @@ export default function Poll({ userName }: { userName: string }) {
     generatePoll();
   }, [generatePoll]);
 
-  // Handle wallet connection
+  // Handle wallet connection with retry for pending permissions
   const connectWallet = async (wallet: WalletOption) => {
-    try {
-      console.log("Connecting wallet:", wallet.name);
-      await connect(config, { connector: wallet.connector });
-      console.log("Wallet connected.");
-      setShowWalletModal(false);
-      await checkNetworkAndAccount();
-    } catch (error: any) {
-      console.error("Wallet connection error:", error);
-      setNetworkError(`Failed to connect with ${wallet.name}: ${error.message}`);
+    if (isConnecting) {
+      console.log("Connection already in progress, please wait...");
+      return;
+    }
+
+    setIsConnecting(true);
+    setNetworkError(null);
+
+    const maxAttempts = 3;
+    let attempt = 0;
+
+    while (attempt < maxAttempts) {
+      try {
+        console.log(`Connecting wallet: ${wallet.name}, attempt ${attempt + 1}`);
+        await connect(config, { connector: wallet.connector });
+        console.log("Wallet connected.");
+        setShowWalletModal(false);
+        await checkNetworkAndAccount();
+        setIsConnecting(false);
+        return; // Success, exit the loop
+      } catch (error: any) {
+        console.error(`Wallet connection error (attempt ${attempt + 1}):`, error);
+        if (
+          error.message.includes("wallet_requestPermissions") &&
+          error.message.includes("already pending")
+        ) {
+          console.log("Pending permissions detected, retrying after delay...");
+          await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
+          attempt++;
+          if (attempt === maxAttempts) {
+            setNetworkError(
+              `Failed to connect with ${wallet.name}: A wallet permission request is pending. Please resolve it in your wallet (e.g., approve or reject the prompt) and try again.`
+            );
+            setIsConnecting(false);
+            return;
+          }
+        } else {
+          setNetworkError(`Failed to connect with ${wallet.name}: ${error.message}`);
+          setIsConnecting(false);
+          return;
+        }
+      }
     }
   };
 
@@ -341,7 +385,14 @@ export default function Poll({ userName }: { userName: string }) {
       <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
         Hey {userName}, {question}
       </h2>
-      {networkError && <p className="text-red-500 text-center mb-4">{networkError}</p>}
+      {networkError && (
+        <div className="text-center mb-4">
+          <p className="text-red-500">{networkError}</p>
+          <p className="text-sm text-gray-600 mt-2">
+            If using a wallet other than MetaMask, we recommend trying MetaMask for the best experience.
+          </p>
+        </div>
+      )}
       {error && (
         <div className="text-center mb-4">
           <p className="text-red-500">{error}</p>
@@ -372,10 +423,15 @@ export default function Poll({ userName }: { userName: string }) {
           </div>
         ) : (
           <button
-            className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all duration-200"
+            className={`p-2 rounded-lg text-white transition-all duration-200 ${
+              isConnecting
+                ? "bg-gray-400 cursor-not-allowed"
+                : "bg-green-500 hover:bg-green-600"
+            }`}
             onClick={() => setShowWalletModal(true)}
+            disabled={isConnecting}
           >
-            Connect Wallet
+            {isConnecting ? "Connecting..." : "Connect Wallet"}
           </button>
         )}
       </div>
@@ -393,6 +449,7 @@ export default function Poll({ userName }: { userName: string }) {
                       : "bg-gray-400 hover:bg-gray-500"
                   }`}
                   onClick={() => connectWallet(wallet)}
+                  disabled={isConnecting}
                 >
                   {wallet.name} {wallet.isDetected ? "(Detected)" : ""}
                 </button>
@@ -401,6 +458,7 @@ export default function Poll({ userName }: { userName: string }) {
             <button
               className="mt-4 p-2 bg-gray-300 text-black rounded-lg w-full"
               onClick={() => setShowWalletModal(false)}
+              disabled={isConnecting}
             >
               Cancel
             </button>
