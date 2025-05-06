@@ -106,6 +106,7 @@ export default function Poll({ userName }: { userName: string }) {
 
   // Detect available wallets
   const detectWallets = useCallback(() => {
+    console.log("Detecting wallets, window.ethereum:", !!window.ethereum);
     const updatedWallets = supportedWallets.map((wallet) => ({
       ...wallet,
       isDetected:
@@ -115,6 +116,7 @@ export default function Poll({ userName }: { userName: string }) {
         (wallet.id === "other" &&
           Boolean(window.ethereum && !window.ethereum.isMetaMask && !window.ethereum.isTrust && !window.ethereum.isCoinbaseWallet)),
     }));
+    console.log("Detected wallets:", updatedWallets);
     setWalletOptions(updatedWallets);
   }, []);
 
@@ -126,9 +128,12 @@ export default function Poll({ userName }: { userName: string }) {
   // Check network and account
   const checkNetworkAndAccount = async () => {
     try {
+      console.log("Checking account with Wagmi...");
       const accountData = getAccount(config);
       const { address, isConnected } = accountData;
+      console.log("Account data:", { address, isConnected });
       if (!isConnected || !address) {
+        console.log("No account connected.");
         setIsWalletConnected(false);
         setAccount(null);
         setBalance(null);
@@ -139,25 +144,32 @@ export default function Poll({ userName }: { userName: string }) {
       setAccount(address);
 
       // Fetch balance
+      console.log("Fetching balance for:", address);
       const balanceData = await fetchBalance(config, {
         address: address as `0x${string}`,
         chainId: MONAD_TESTNET_CHAIN_ID,
       });
+      console.log("Balance:", balanceData.value);
       setBalance(ethers.formatEther(balanceData.value));
 
       // Check network
       const currentChainId = accountData.chainId;
+      console.log("Current chainId (Wagmi):", currentChainId);
       if (currentChainId !== MONAD_TESTNET_CHAIN_ID) {
+        console.log("Switching to Monad Testnet via Wagmi...");
         try {
           await switchChain(config, { chainId: MONAD_TESTNET_CHAIN_ID });
+          console.log("Switched to Monad Testnet.");
         } catch (switchError: any) {
+          console.error("Wagmi switch chain error:", switchError);
           setNetworkError("Please switch to the Monad Testnet in your wallet.");
           return false;
         }
       }
       return true;
     } catch (error: any) {
-      setNetworkError("Error checking network: " + error.message);
+      console.error("Error checking network/account:", error.message, error);
+      setNetworkError(`Error checking network: ${error.message}`);
       return false;
     }
   };
@@ -166,14 +178,22 @@ export default function Poll({ userName }: { userName: string }) {
   useEffect(() => {
     const initContract = async () => {
       try {
+        console.log("Initializing contract...");
         const isNetworkCorrect = await checkNetworkAndAccount();
-        if (!isNetworkCorrect) return;
+        console.log("Network correct:", isNetworkCorrect);
+        if (!isNetworkCorrect) {
+          console.error("Network check failed. Wallet not connected or wrong network.");
+          setError("Please connect your wallet to Monad Testnet and try again.");
+          return;
+        }
 
+        console.log("Calling getContract...");
         const contractInstance = await getContract();
+        console.log("Contract initialized:", contractInstance.address);
         setContract(contractInstance);
       } catch (error: any) {
-        console.error("Error initializing contract:", error);
-        setError("Failed to initialize contract. Please refresh and try again.");
+        console.error("Error initializing contract:", error.message, error);
+        setError(`Failed to initialize contract: ${error.message}. Please refresh and try again.`);
       }
     };
     initContract();
@@ -181,6 +201,7 @@ export default function Poll({ userName }: { userName: string }) {
 
   // Generate a new poll
   const generatePoll = useCallback(() => {
+    console.log("Generating new poll...");
     const categories = [dApps, tokens, nfts];
     const selectedCategory = categories[Math.floor(Math.random() * categories.length)];
     const shuffledItems = [...selectedCategory].sort(() => Math.random() - 0.5);
@@ -196,6 +217,7 @@ export default function Poll({ userName }: { userName: string }) {
     }
     const selectedQuestion = questionPool[Math.floor(Math.random() * questionPool.length)];
 
+    console.log("Poll items:", twoItems, "Question:", selectedQuestion);
     setPollItems(twoItems);
     setQuestion(selectedQuestion);
     setShowFeedback(false);
@@ -210,10 +232,13 @@ export default function Poll({ userName }: { userName: string }) {
   // Handle wallet connection
   const connectWallet = async (wallet: WalletOption) => {
     try {
+      console.log("Connecting wallet:", wallet.name);
       await connect(config, { connector: wallet.connector });
+      console.log("Wallet connected.");
       setShowWalletModal(false);
       await checkNetworkAndAccount();
     } catch (error: any) {
+      console.error("Wallet connection error:", error);
       setNetworkError(`Failed to connect with ${wallet.name}: ${error.message}`);
     }
   };
@@ -221,13 +246,16 @@ export default function Poll({ userName }: { userName: string }) {
   // Handle wallet disconnection
   const disconnectWallet = async () => {
     try {
+      console.log("Disconnecting wallet...");
       await disconnect(config);
       setIsWalletConnected(false);
       setAccount(null);
       setBalance(null);
       setContract(null);
       setNetworkError(null);
+      console.log("Wallet disconnected.");
     } catch (error: any) {
+      console.error("Disconnect error:", error);
       setError("Failed to disconnect wallet: " + error.message);
     }
   };
@@ -235,6 +263,7 @@ export default function Poll({ userName }: { userName: string }) {
   // Handle vote casting
   const handleVote = async (item: string) => {
     if (!contract) {
+      console.error("Vote attempted but contract is null.");
       setError("Contract not initialized. Please refresh and try again.");
       return;
     }
@@ -243,19 +272,21 @@ export default function Poll({ userName }: { userName: string }) {
     setError(null);
 
     try {
+      console.log("Casting vote for:", item);
       const tx = await contract.castVote(item);
       console.log("Transaction sent:", tx.hash);
       await tx.wait();
       console.log("Transaction confirmed:", tx.hash);
 
       if (actions?.composeCast) {
+        console.log("Posting to Warpcast...");
         actions.composeCast({
           text: `I voted for ${item}! #MiniPoll`,
           embeds: [],
         });
-        console.log("Thanks for voting!");
+        console.log("Cast posted.");
       } else {
-        console.log("Actions not available");
+        console.log("Actions not available for Warpcast post.");
       }
 
       setShowFeedback(true);
