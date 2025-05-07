@@ -2,23 +2,20 @@ import { useFrame } from "../components/farcaster-provider";
 import { FrameContext } from "@farcaster/frame-core/dist/context";
 import sdk from "@farcaster/frame-sdk";
 
-// Define user type based on Farcaster context
 interface WarpcastUser {
   fid?: number;
-  pfp?: string; // Maps to pfpUrl
+  pfp?: string;
   username?: string;
   displayName?: string;
 }
 
-// Define the expected structure of UserContext (inferred from usage)
 interface UserContext {
-  fid?: number; // Made optional to match runtime behavior
+  fid?: number;
   pfpUrl?: string;
   username?: string;
   displayName?: string;
 }
 
-// Define specific types for each context
 interface FarcasterContextResult {
   context: FrameContext;
   actions: typeof sdk.actions | null;
@@ -34,25 +31,20 @@ interface NoContextResult {
   user: null;
 }
 
-// Union type of all possible results
 type ContextResult = FarcasterContextResult | NoContextResult;
 
 export const useMiniAppContext = (): ContextResult => {
-  // Try to get Farcaster context
   try {
     const farcasterContext = useFrame();
     if (farcasterContext.context) {
-      // Log the context to confirm its structure
       console.log("Farcaster Context:", farcasterContext.context);
-
       const context = farcasterContext.context;
       const user: WarpcastUser = {
         fid: context?.user?.fid ?? undefined,
-        pfp: context?.user?.pfpUrl ?? undefined, // Map pfpUrl to pfp
+        pfp: context?.user?.pfpUrl ?? undefined,
         username: context?.user?.username ?? undefined,
         displayName: context?.user?.displayName ?? undefined,
       };
-
       return {
         context,
         actions: farcasterContext.actions,
@@ -63,8 +55,6 @@ export const useMiniAppContext = (): ContextResult => {
   } catch (e) {
     console.error("Error accessing Farcaster context:", e);
   }
-
-  // No context found
   return {
     type: null,
     context: null,

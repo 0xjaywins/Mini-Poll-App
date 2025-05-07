@@ -1,4 +1,4 @@
-import React, { memo, useState, useEffect, useCallback } from "react";
+import React, { memo, useState, useEffect, useCallback, useRef } from "react";
 import { useMiniAppContext } from "../../hooks/use-miniapp-context";
 import { dApps, comparisonQuestions } from "../../lib/monadEcosystem";
 import { getContract } from "../../utils/contract";
@@ -13,7 +13,6 @@ import {
 } from "@wagmi/core";
 import { injected, coinbaseWallet } from "@wagmi/connectors";
 import { http } from "viem";
-import { motion, AnimatePresence } from "framer-motion";
 import confetti from "canvas-confetti";
 import Image from "next/image";
 
@@ -90,6 +89,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
   const [isLoadingVotes, setIsLoadingVotes] = useState<boolean>(false);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [isVoting, setIsVoting] = useState<boolean>(false);
+  const isGeneratingPoll = useRef(false);
 
   // Log user data
   useEffect(() => {
@@ -245,6 +245,12 @@ const Poll = memo(({ userName }: { userName: string }) => {
 
   // Generate poll
   const generatePoll = useCallback(() => {
+    if (isGeneratingPoll.current) {
+      console.log("Poll generation already in progress, skipping...");
+      return;
+    }
+    isGeneratingPoll.current = true;
+
     console.log("Generating poll at:", new Date().toISOString());
     const categories = [dApps];
     const selectedCategory = categories[0];
@@ -265,6 +271,8 @@ const Poll = memo(({ userName }: { userName: string }) => {
     setError(null);
     setVoteCounts({});
     fetchVoteCounts();
+
+    isGeneratingPoll.current = false;
   }, [fetchVoteCounts, prevQuestion]);
 
   useEffect(() => {
@@ -392,7 +400,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
   useEffect(() => {
     if (showConfetti) {
       confetti({
-        particleCount: 200,
+        particleCount: 100, // Reduced particle count for iframe performance
         spread: 70,
         origin: { y: 0.6 },
         disableForReducedMotion: true,
@@ -415,47 +423,40 @@ const Poll = memo(({ userName }: { userName: string }) => {
 
   if (!pollItems.length && !showFeedback) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
-        <span className="ml-2 text-gray-600 dark:text-gray-300">Loading poll...</span>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="flex items-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+          <span className="ml-2 text-gray-600 dark:text-gray-300">Loading poll...</span>
+        </div>
       </div>
     );
   }
 
   if (showFeedback) {
     return (
-      <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg text-center">
-        <motion.p
-          initial={{ opacity: 0, scale: 0.8 }}
-          animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.3 }}
-          className="text-lg font-semibold text-success-600 dark:text-success-400"
-        >
-          Vote submitted! Loading new poll...
-        </motion.p>
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+        <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg text-center">
+          <p className="text-lg font-semibold text-success-600 dark:text-success-400">
+            Vote submitted! Loading new poll...
+          </p>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
-      <header className="text-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 font-inter">MiniPoll: Monad Ecosystem</h1>
-        <p className="text-gray-600 dark:text-gray-300">Vote on your favorite dApps and share on Warpcast!</p>
-      </header>
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={question}
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -20 }}
-          transition={{ duration: 0.3, ease: "easeInOut" }}
-        >
+    <div className="min-h-screen flex items-center justify-center bg-gray-100 dark:bg-gray-900">
+      <div className="max-w-md max-w-full mx-auto p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+        <header className="text-center mb-6">
+          <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 font-inter">MiniPoll: Monad Ecosystem</h1>
+          <p className="text-gray-600 dark:text-gray-300">Vote on your favorite dApps and share on Warpcast!</p>
+        </header>
+        <div>
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-6 text-center font-inter">
             Hey {user?.displayName || userName}, {question}
           </h2>
           {networkError && (
-            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/50 rounded-lg text-center animate-pulse">
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/50 rounded-lg text-center">
               <p className="text-red-600 dark:text-red-300 font-medium">{networkError}</p>
               <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
                 Try MetaMask for the best experience.
@@ -463,11 +464,11 @@ const Poll = memo(({ userName }: { userName: string }) => {
             </div>
           )}
           {error && (
-            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/50 rounded-lg text-center animate-pulse">
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/50 rounded-lg text-center">
               <p className="text-red-600 dark:text-red-300 font-medium">{error}</p>
               {retryCount < 3 && (
                 <button
-                  className="mt-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all duration-200"
+                  className="mt-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-colors duration-200"
                   onClick={handleRetry}
                   aria-label="Retry contract initialization"
                 >
@@ -517,7 +518,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
                   Balance: {balance ? `${balance} MON` : "Loading..."}
                 </p>
                 <button
-                  className="mt-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 hover:scale-105 transition-all duration-200"
+                  className="mt-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors duration-200"
                   onClick={disconnectWallet}
                   aria-label="Disconnect wallet"
                 >
@@ -526,7 +527,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
               </div>
             ) : (
               <button
-                className={`px-4 py-2 rounded-lg text-white transition-all duration-200 font-medium hover:scale-105 ${
+                className={`px-4 py-2 rounded-lg text-white transition-colors duration-200 font-medium ${
                   isConnecting
                     ? "bg-gray-400 cursor-not-allowed"
                     : "bg-primary-500 hover:bg-primary-600"
@@ -540,13 +541,8 @@ const Poll = memo(({ userName }: { userName: string }) => {
             )}
           </div>
           {showWalletModal && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-sm w-full"
-              >
+            <div className="absolute top-0 left-0 right-0 bottom-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <div className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-sm w-full">
                 <h3 className="text-lg font-semibold mb-4 font-inter text-gray-800 dark:text-gray-100">
                   Select Wallet
                 </h3>
@@ -554,7 +550,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
                   {walletOptions.map((wallet) => (
                     <button
                       key={wallet.id}
-                      className={`w-full px-4 py-2 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 ${
+                      className={`w-full px-4 py-2 rounded-lg text-white font-medium transition-colors duration-200 ${
                         wallet.isDetected
                           ? "bg-primary-500 hover:bg-primary-600"
                           : "bg-gray-400 hover:bg-gray-500"
@@ -568,21 +564,21 @@ const Poll = memo(({ userName }: { userName: string }) => {
                   ))}
                 </div>
                 <button
-                  className="mt-4 w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
+                  className="mt-4 w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors duration-200"
                   onClick={() => setShowWalletModal(false)}
                   disabled={isConnecting}
                   aria-label="Cancel wallet selection"
                 >
                   Cancel
                 </button>
-              </motion.div>
+              </div>
             </div>
           )}
           <div className="space-y-6">
             {pollItems.map((item, index) => (
               <div key={item.name}>
                 <button
-                  className={`w-full p-4 bg-primary-500 dark:bg-primary-600 text-white rounded-lg hover:bg-primary-600 dark:hover:bg-primary-700 hover:scale-105 transition-all duration-200 flex flex-col items-start disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 shadow-md`}
+                  className={`w-full p-4 bg-primary-500 dark:bg-primary-600 text-white rounded-lg hover:bg-primary-600 dark:hover:bg-primary-700 transition-colors duration-200 flex flex-col items-start disabled:bg-gray-400 disabled:cursor-not-allowed shadow-md`}
                   onClick={() => handleVote(item.name)}
                   disabled={loading || !!networkError || !isWalletConnected || !contract || isVoting}
                   aria-label={`Vote for ${item.name}`}
@@ -596,19 +592,17 @@ const Poll = memo(({ userName }: { userName: string }) => {
                     </span>
                   )}
                 </button>
-                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mt-2">
-                  <motion.div
-                    className="bg-primary-600 dark:bg-primary-500 h-3 rounded-full"
-                    initial={{ width: 0 }}
-                    animate={{ width: `${index === 0 ? option1Percentage : option2Percentage}%` }}
-                    transition={{ duration: 0.5 }}
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mt-2 overflow-hidden">
+                  <div
+                    className="bg-primary-600 dark:bg-primary-500 h-3 rounded-full transition-width duration-500"
+                    style={{ width: `${index === 0 ? option1Percentage : option2Percentage}%` }}
                   />
                 </div>
               </div>
             ))}
           </div>
-        </motion.div>
-      </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 });
