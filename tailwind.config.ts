@@ -29,6 +29,7 @@ const config: Config = {
       animation: {
         fadeIn: "fadeIn 0.3s ease-in-out",
         fadeOut: "fadeOut 0.3s ease-in-out",
+        bounce: "bounce 1s infinite", // Added bounce animation
       },
       keyframes: {
         fadeIn: {
@@ -38,6 +39,16 @@ const config: Config = {
         fadeOut: {
           "0%": { opacity: "1" },
           "100%": { opacity: "0" },
+        },
+        bounce: {
+          "0%, 100%": {
+            transform: "translateY(0)",
+            animationTimingFunction: "cubic-bezier(0.8, 0, 1, 1)",
+          },
+          "50%": {
+            transform: "translateY(-10px)",
+            animationTimingFunction: "cubic-bezier(0, 0, 0.2, 1)",
+          },
         },
       },
     },

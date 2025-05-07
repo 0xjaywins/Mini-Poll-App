@@ -14,6 +14,7 @@ import {
 import { injected, coinbaseWallet } from "@wagmi/connectors";
 import { http } from "viem";
 import Image from "next/image";
+import Confetti from "react-confetti";
 
 // Monad Testnet chain configuration
 const monadTestnet = {
@@ -73,7 +74,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
   const { actions, user } = useMiniAppContext();
   const [pollItems, setPollItems] = useState<PollItem[]>([]);
   const [question, setQuestion] = useState<string>("");
-  const [category, setCategory] = useState<"dApps" | "tokens" | "nfts">("dApps"); // Track the current category
+  const [category, setCategory] = useState<"dApps" | "tokens" | "nfts">("dApps");
   const [showFeedback, setShowFeedback] = useState<boolean>(false);
   const [contract, setContract] = useState<ethers.Contract | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -90,12 +91,10 @@ const Poll = memo(({ userName }: { userName: string }) => {
   const [isLoadingVotes, setIsLoadingVotes] = useState<boolean>(false);
   const [isVoting, setIsVoting] = useState<boolean>(false);
 
-  // Log user data to verify Warpcast details
   useEffect(() => {
     console.log("Warpcast User Data:", user);
   }, [user]);
 
-  // Detect available wallets
   const detectWallets = useCallback(() => {
     console.log("Detecting wallets, window.ethereum:", !!window.ethereum);
     const updatedWallets = supportedWallets.map((wallet) => {
@@ -125,7 +124,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     detectWallets();
   }, [detectWallets]);
 
-  // Check network and account
   const checkNetworkAndAccount = async () => {
     try {
       console.log("Checking account with Wagmi...");
@@ -172,7 +170,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Initialize the contract with retry mechanism
   const initContract = useCallback(async () => {
     if (retryCount >= 3) {
       console.error("Max retries reached for contract initialization.");
@@ -209,7 +206,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   }, [isWalletConnected, initContract]);
 
-  // Fetch vote counts
   const fetchVoteCounts = useCallback(async () => {
     if (!contract || !pollItems.length) {
       console.log("Cannot fetch vote counts: contract or pollItems not ready.");
@@ -237,14 +233,12 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   }, [contract, pollItems]);
 
-  // Fetch vote counts when contract or poll items change
   useEffect(() => {
     if (contract && pollItems.length) {
       fetchVoteCounts();
     }
   }, [contract, pollItems, fetchVoteCounts]);
 
-  // Generate a new poll
   const generatePoll = useCallback(() => {
     console.log("Generating new poll...");
     const categories = [
@@ -275,7 +269,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     setVoteCounts({});
   }, []);
 
-  // Initial poll generation
   useEffect(() => {
     let isMounted = true;
     if (isMounted) {
@@ -286,7 +279,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     };
   }, [generatePoll]);
 
-  // Handle wallet connection
   const connectWallet = async (wallet: WalletOption) => {
     if (isConnecting) {
       console.log("Connection already in progress, please wait...");
@@ -333,7 +325,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Handle wallet disconnection
   const disconnectWallet = async () => {
     try {
       console.log("Disconnecting wallet...");
@@ -352,7 +343,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Handle vote casting
   const handleVote = async (item: string) => {
     if (!contract || isVoting) {
       console.error("Vote attempted but contract is null or voting in progress.");
@@ -395,7 +385,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Manual retry for contract initialization
   const handleRetry = () => {
     console.log("Retrying contract initialization...");
     setError(null);
@@ -403,7 +392,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
     initContract();
   };
 
-  // Calculate total votes for progress bar
   const totalVotes = (parseInt(voteCounts[pollItems[0]?.name] || "0") + parseInt(voteCounts[pollItems[1]?.name] || "0")).toString();
   const option1Percentage =
     totalVotes !== "0" ? (parseInt(voteCounts[pollItems[0]?.name] || "0") / parseInt(totalVotes)) * 100 : 50;
@@ -411,37 +399,52 @@ const Poll = memo(({ userName }: { userName: string }) => {
     totalVotes !== "0" ? (parseInt(voteCounts[pollItems[1]?.name] || "0") / parseInt(totalVotes)) * 100 : 50;
 
   if (!pollItems.length && !showFeedback) {
-    return <div className="text-center text-gray-500">Loading poll...</div>;
+    return (
+      <div className="text-center text-gray-500 animate-pulse">
+        Loading poll...
+      </div>
+    );
   }
 
   if (showFeedback) {
     return (
-      <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg text-center">
-        <p className="text-lg text-green-600 font-medium">Vote submitted! Loading new poll...</p>
+      <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-100 rounded-lg shadow-xl text-center">
+        <Confetti recycle={false} numberOfPieces={300} colors={["#3B82F6", "#16A34A", "#EF4444", "#FBBF24"]} />
+        <p className="text-lg text-green-600 font-semibold animate-bounce">
+          Vote submitted! Loading new poll...
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg">
+    <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-2xl border-2 border-blue-200/50">
       <div key={question} className="animate-fadeIn">
-        <h2 className="text-2xl font-semibold text-gray-800 mb-6 text-center">
+        <h1 className="text-3xl font-extrabold text-center mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text drop-shadow-lg animate-pulse">
+          Monad Ecosystem: Mini Poll App, Vote Your Favorite dApps...
+        </h1>
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">
           Hey {user?.displayName || userName}, {question}
         </h2>
+        <div className="text-center mb-4">
+          <span className="inline-block px-4 py-1 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-full text-sm capitalize font-medium shadow-md transform hover:scale-105 transition-transform duration-200">
+            {category}
+          </span>
+        </div>
         {networkError && (
-          <div className="text-center mb-4">
-            <p className="text-red-500">{networkError}</p>
+          <div className="text-center mb-4 p-4 bg-red-50 rounded-lg shadow-md">
+            <p className="text-red-600 font-medium">{networkError}</p>
             <p className="text-sm text-gray-600 mt-2">
               If using a wallet other than MetaMask, we recommend trying MetaMask for the best experience.
             </p>
           </div>
         )}
         {error && (
-          <div className="text-center mb-4">
-            <p className="text-red-500">{error}</p>
+          <div className="text-center mb-4 p-4 bg-red-50 rounded-lg shadow-md">
+            <p className="text-red-600 font-medium">{error}</p>
             {retryCount < 3 && (
               <button
-                className="mt-2 p-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200"
+                className="mt-2 px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-700 text-white rounded-lg shadow-lg hover:from-blue-600 hover:to-blue-800 transform hover:scale-105 transition-all duration-200"
                 onClick={handleRetry}
               >
                 Retry
@@ -449,38 +452,46 @@ const Poll = memo(({ userName }: { userName: string }) => {
             )}
           </div>
         )}
-        {loading && <p className="text-blue-500 text-center mb-4">Waiting for transaction confirmation...</p>}
-        {isLoadingVotes && <p className="text-blue-500 text-center mb-4">Loading vote counts...</p>}
-        <div className="text-center mb-4">
+        {loading && (
+          <p className="text-blue-600 text-center mb-4 font-medium animate-pulse">
+            Waiting for transaction confirmation...
+          </p>
+        )}
+        {isLoadingVotes && (
+          <p className="text-blue-600 text-center mb-4 font-medium animate-pulse">
+            Loading vote counts...
+          </p>
+        )}
+        <div className="text-center mb-6">
           {isWalletConnected ? (
-            <div className="flex flex-col items-center">
+            <div className="flex flex-col items-center bg-gradient-to-b from-gray-50 to-white p-4 rounded-lg shadow-lg">
               {user?.pfp ? (
                 <Image
                   src={user.pfp}
                   alt="Profile"
-                  className="w-12 h-12 rounded-full mb-2 border-2 border-blue-500"
-                  width={48}
-                  height={48}
-                  onError={(e) => (e.currentTarget.src = "https://via.placeholder.com/48")}
+                  className="w-14 h-14 rounded-full mb-3 border-4 border-gradient-to-r from-blue-400 to-purple-400 shadow-lg transform hover:scale-110 transition-transform duration-200"
+                  width={56}
+                  height={56}
+                  onError={(e) => (e.currentTarget.src = "https://via.placeholder.com/56")}
                 />
               ) : (
                 <Image
-                  src="https://via.placeholder.com/48"
+                  src="https://via.placeholder.com/56"
                   alt="Profile Placeholder"
-                  className="w-12 h-12 rounded-full mb-2 border-2 border-blue-500"
-                  width={48}
-                  height={48}
+                  className="w-14 h-14 rounded-full mb-3 border-4 border-gradient-to-r from-blue-400 to-purple-400 shadow-lg transform hover:scale-110 transition-transform duration-200"
+                  width={56}
+                  height={56}
                 />
               )}
-              <p className="text-sm text-gray-600">Warpcast ID: {user?.fid || "N/A"}</p>
-              {user?.username && <p className="text-sm text-gray-600">Username: {user.username}</p>}
-              {user?.displayName && <p className="text-sm text-gray-600">Display Name: {user.displayName}</p>}
-              <p className="text-sm text-gray-600">
+              <p className="text-sm text-gray-700 font-medium">Warpcast ID: {user?.fid || "N/A"}</p>
+              {user?.username && <p className="text-sm text-gray-700 font-medium">Username: {user.username}</p>}
+              {user?.displayName && <p className="text-sm text-gray-700 font-medium">Display Name: {user.displayName}</p>}
+              <p className="text-sm text-gray-700 font-medium">
                 Wallet: {account?.slice(0, 6)}...{account?.slice(-4)}
               </p>
-              <p className="text-sm text-gray-600">Balance: {balance ? `${balance} MON` : "Loading..."}</p>
+              <p className="text-sm text-gray-700 font-medium">Balance: {balance ? `${balance} MON` : "Loading..."}</p>
               <button
-                className="p-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-all duration-200 mt-2 shadow-md"
+                className="mt-3 px-4 py-2 bg-gradient-to-r from-red-500 to-red-700 text-white rounded-lg shadow-lg hover:from-red-600 hover:to-red-800 transform hover:scale-105 transition-all duration-200"
                 onClick={disconnectWallet}
               >
                 Disconnect Wallet
@@ -488,10 +499,10 @@ const Poll = memo(({ userName }: { userName: string }) => {
             </div>
           ) : (
             <button
-              className={`p-2 rounded-lg text-white transition-all duration-200 shadow-md ${
+              className={`px-4 py-2 rounded-lg text-white shadow-lg transform hover:scale-105 transition-all duration-200 ${
                 isConnecting
                   ? "bg-gray-400 cursor-not-allowed"
-                  : "bg-green-600 hover:bg-green-600"
+                  : "bg-gradient-to-r from-green-500 to-green-700 hover:from-green-600 hover:to-green-800"
               }`}
               onClick={() => setShowWalletModal(true)}
               disabled={isConnecting}
@@ -501,17 +512,17 @@ const Poll = memo(({ userName }: { userName: string }) => {
           )}
         </div>
         {showWalletModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center">
-            <div className="bg-white p-6 rounded-lg shadow-lg max-w-sm w-full">
-              <h3 className="text-lg font-semibold mb-4">Select Wallet</h3>
-              <div className="space-y-2">
+          <div className="fixed inset-0 bg-black bg-opacity-60 flex items-center justify-center">
+            <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full border-2 border-blue-200/50">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800 text-center">Select Wallet</h3>
+              <div className="space-y-3">
                 {walletOptions.map((wallet) => (
                   <button
                     key={wallet.id}
-                    className={`w-full p-2 rounded-lg text-white transition-all duration-200 shadow-md ${
+                    className={`w-full px-4 py-3 rounded-lg text-white shadow-md transform hover:scale-105 transition-all duration-200 ${
                       wallet.isDetected
-                        ? "bg-blue-500 hover:bg-blue-600"
-                        : "bg-gray-400 hover:bg-gray-500"
+                        ? "bg-gradient-to-r from-blue-500 to-blue-700 hover:from-blue-600 hover:to-blue-800"
+                        : "bg-gradient-to-r from-gray-400 to-gray-500 hover:from-gray-500 hover:to-gray-600"
                     }`}
                     onClick={() => connectWallet(wallet)}
                     disabled={isConnecting}
@@ -521,7 +532,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
                 ))}
               </div>
               <button
-                className="mt-4 p-2 bg-gray-300 text-black rounded-lg w-full shadow-md"
+                className="mt-4 px-4 py-2 bg-gradient-to-r from-gray-300 to-gray-400 text-gray-800 rounded-lg w-full shadow-md hover:from-gray-400 hover:to-gray-500 transform hover:scale-105 transition-all duration-200"
                 onClick={() => setShowWalletModal(false)}
                 disabled={isConnecting}
               >
@@ -530,48 +541,48 @@ const Poll = memo(({ userName }: { userName: string }) => {
             </div>
           </div>
         )}
-        <div className="space-y-4">
+        <div className="space-y-6">
           <div>
             <button
-              className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
+              className="w-full p-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg shadow-lg hover:from-blue-600 hover:to-purple-600 transform hover:scale-105 transition-all duration-200 flex flex-col items-start disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
               onClick={() => handleVote(pollItems[0].name)}
               disabled={loading || !!networkError || !isWalletConnected || !contract || isVoting}
             >
-              <span className="text-lg font-medium">{pollItems[0].name}</span>
+              <span className="text-lg font-semibold">{pollItems[0].name}</span>
               <span className="text-sm text-gray-100">{pollItems[0].description}</span>
               {voteCounts[pollItems[0].name] !== undefined && (
-                <span className="text-sm text-gray-100">Votes: {voteCounts[pollItems[0].name]}</span>
+                <span className="text-sm text-gray-100 mt-1">Votes: {voteCounts[pollItems[0].name]}</span>
               )}
             </button>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+            <div className="w-full bg-gray-200 rounded-full h-3 mt-3 shadow-inner">
               <div
-                className="bg-blue-600 h-2.5 rounded-full"
+                className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500 ease-in-out"
                 style={{ width: `${option1Percentage}%` }}
               ></div>
             </div>
           </div>
           <div>
             <button
-              className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
+              className="w-full p-4 bg-gradient-to-r from-blue-500 to-purple-500 text-white rounded-lg shadow-lg hover:from-blue-600 hover:to-purple-600 transform hover:scale-105 transition-all duration-200 flex flex-col items-start disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed"
               onClick={() => handleVote(pollItems[1].name)}
               disabled={loading || !!networkError || !isWalletConnected || !contract || isVoting}
             >
-              <span className="text-lg font-medium">{pollItems[1].name}</span>
+              <span className="text-lg font-semibold">{pollItems[1].name}</span>
               <span className="text-sm text-gray-100">{pollItems[1].description}</span>
               {voteCounts[pollItems[1].name] !== undefined && (
-                <span className="text-sm text-gray-100">Votes: {voteCounts[pollItems[1].name]}</span>
+                <span className="text-sm text-gray-100 mt-1">Votes: {voteCounts[pollItems[1].name]}</span>
               )}
             </button>
-            <div className="w-full bg-gray-200 rounded-full h-2.5 mt-2">
+            <div className="w-full bg-gray-200 rounded-full h-3 mt-3 shadow-inner">
               <div
-                className="bg-blue-600 h-2.5 rounded-full"
+                className="bg-gradient-to-r from-blue-500 to-purple-500 h-3 rounded-full transition-all duration-500 ease-in-out"
                 style={{ width: `${option2Percentage}%` }}
               ></div>
             </div>
           </div>
         </div>
         <button
-          className="mt-4 p-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-all duration-200 w-full"
+          className="mt-6 px-4 py-2 bg-gradient-to-r from-gray-500 to-gray-700 text-white rounded-lg shadow-lg hover:from-gray-600 hover:to-gray-800 transform hover:scale-105 transition-all duration-200 w-full"
           onClick={generatePoll}
           disabled={isVoting}
         >
