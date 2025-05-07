@@ -1,1 +1,1 @@
-# Monad x Farcaster Mini poll App
+# Monad x Warpcast Mini poll App
