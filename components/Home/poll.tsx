@@ -14,7 +14,7 @@ import {
 import { injected, coinbaseWallet } from "@wagmi/connectors";
 import { http } from "viem";
 import { motion, AnimatePresence } from "framer-motion";
-import Confetti from "react-confetti";
+import confetti from "canvas-confetti";
 import Image from "next/image";
 
 // Monad Testnet chain configuration
@@ -22,11 +22,7 @@ const monadTestnet = {
   id: 10143,
   name: "Monad Testnet",
   network: "monad-testnet",
-  nativeCurrency: {
-    name: "MON",
-    symbol: "MON",
-    decimals: 18,
-  },
+  nativeCurrency: { name: "MON", symbol: "MON", decimals: 18 },
   rpcUrls: {
     default: { http: ["https://testnet-rpc.monad.xyz"] },
     public: { http: ["https://testnet-rpc.monad.xyz"] },
@@ -68,17 +64,8 @@ const supportedWallets: WalletOption[] = [
   { id: "metamask", name: "MetaMask", connector: injected({ target: "metaMask" }), isDetected: false },
   { id: "trustwallet", name: "Trust Wallet", connector: injected({ target: "trustWallet" }), isDetected: false },
   { id: "coinbase", name: "Coinbase Wallet", connector: coinbaseWallet({ appName: "MiniPoll" }), isDetected: false },
-  { id: "other", name: "Other Injected Wallet", connector: injected(), isDetected: false },
+  { id: "other", name: "Other Wallet", connector: injected(), isDetected: false },
 ];
-
-// Debounce utility
-function debounce(func: (...args: any[]) => void, wait: number) {
-  let timeout: NodeJS.Timeout;
-  return (...args: any[]) => {
-    clearTimeout(timeout);
-    timeout = setTimeout(() => func(...args), wait);
-  };
-}
 
 const Poll = memo(({ userName }: { userName: string }) => {
   console.log("Poll component rendered at:", new Date().toISOString());
@@ -86,6 +73,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
 
   const [pollItems, setPollItems] = useState<PollItem[]>([]);
   const [question, setQuestion] = useState<string>("");
+  const [prevQuestion, setPrevQuestion] = useState<string | null>(null);
   const [showFeedback, setShowFeedback] = useState<boolean>(false);
   const [contract, setContract] = useState<ethers.Contract | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
@@ -103,12 +91,12 @@ const Poll = memo(({ userName }: { userName: string }) => {
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
   const [isVoting, setIsVoting] = useState<boolean>(false);
 
-  // Log user data to verify
+  // Log user data
   useEffect(() => {
     console.log("Warpcast User Data:", user);
   }, [user]);
 
-  // Detect available wallets
+  // Detect wallets
   const detectWallets = useCallback(() => {
     console.log("Detecting wallets, window.ethereum:", !!window.ethereum);
     const updatedWallets = supportedWallets.map((wallet) => {
@@ -185,11 +173,11 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Initialize the contract with retry mechanism
+  // Initialize contract
   const initContract = useCallback(async () => {
     if (retryCount >= 3) {
       console.error("Max retries reached for contract initialization.");
-      setError("Failed to initialize contract after multiple attempts. Please ensure your wallet is connected to Monad Testnet and try again.");
+      setError("Failed to initialize contract after multiple attempts.");
       return;
     }
 
@@ -198,8 +186,8 @@ const Poll = memo(({ userName }: { userName: string }) => {
       const isNetworkCorrect = await checkNetworkAndAccount();
       console.log("Network correct:", isNetworkCorrect);
       if (!isNetworkCorrect) {
-        console.error("Network check failed. Wallet not connected or wrong network.");
-        setError("Please connect your wallet to Monad Testnet and try again.");
+        console.error("Network check failed.");
+        setError("Please connect your wallet to Monad Testnet.");
         setRetryCount((prev) => prev + 1);
         return;
       }
@@ -255,28 +243,29 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   }, [contract, pollItems, fetchVoteCounts]);
 
-  // Generate a new poll with debounce
-  const generatePoll = useCallback(
-    debounce(() => {
-      console.log("Generating poll at:", new Date().toISOString());
-      const categories = [dApps];
-      const selectedCategory = categories[0];
-      const shuffledItems = [...selectedCategory].sort(() => Math.random() - 0.5);
-      const twoItems = shuffledItems.slice(0, 2);
+  // Generate poll
+  const generatePoll = useCallback(() => {
+    console.log("Generating poll at:", new Date().toISOString());
+    const categories = [dApps];
+    const selectedCategory = categories[0];
+    const shuffledItems = [...selectedCategory].sort(() => Math.random() - 0.5);
+    const twoItems = shuffledItems.slice(0, 2);
 
-      const questionPool = comparisonQuestions.filter((q) => q.includes("dApp"));
-      const selectedQuestion = questionPool[Math.floor(Math.random() * questionPool.length)];
+    const questionPool = comparisonQuestions.filter((q) => q.includes("dApp") && q !== prevQuestion);
+    const selectedQuestion =
+      questionPool.length > 0
+        ? questionPool[Math.floor(Math.random() * questionPool.length)]
+        : comparisonQuestions.find((q) => q.includes("dApp")) || "Which dApp is better?";
 
-      console.log("Poll items:", twoItems, "Question:", selectedQuestion);
-      setPollItems(twoItems);
-      setQuestion(selectedQuestion);
-      setShowFeedback(false);
-      setError(null);
-      setVoteCounts({});
-      fetchVoteCounts();
-    }, 1000),
-    [fetchVoteCounts]
-  );
+    console.log("Previous question:", prevQuestion, "New question:", selectedQuestion);
+    setPollItems(twoItems);
+    setQuestion(selectedQuestion);
+    setPrevQuestion(selectedQuestion);
+    setShowFeedback(false);
+    setError(null);
+    setVoteCounts({});
+    fetchVoteCounts();
+  }, [fetchVoteCounts, prevQuestion]);
 
   useEffect(() => {
     let isMounted = true;
@@ -288,10 +277,10 @@ const Poll = memo(({ userName }: { userName: string }) => {
     };
   }, [generatePoll]);
 
-  // Handle wallet connection
+  // Connect wallet
   const connectWallet = async (wallet: WalletOption) => {
     if (isConnecting) {
-      console.log("Connection already in progress, please wait...");
+      console.log("Connection already in progress...");
       return;
     }
 
@@ -316,12 +305,12 @@ const Poll = memo(({ userName }: { userName: string }) => {
           error.message.includes("wallet_requestPermissions") &&
           error.message.includes("already pending")
         ) {
-          console.log("Pending permissions detected, retrying after delay...");
+          console.log("Pending permissions detected, retrying...");
           await new Promise((resolve) => setTimeout(resolve, 2000));
           attempt++;
           if (attempt === maxAttempts) {
             setNetworkError(
-              `Failed to connect with ${wallet.name}: A wallet permission request is pending. Please resolve it in your wallet and try again.`
+              `Failed to connect with ${wallet.name}: A wallet permission request is pending.`
             );
             setIsConnecting(false);
             return;
@@ -335,7 +324,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Handle wallet disconnection
+  // Disconnect wallet
   const disconnectWallet = async () => {
     try {
       console.log("Disconnecting wallet...");
@@ -354,11 +343,11 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Handle vote casting
+  // Handle vote
   const handleVote = async (item: string) => {
     if (!contract || isVoting) {
-      console.error("Vote attempted but contract is null or voting is in progress.");
-      setError("Contract not initialized or voting in progress. Please wait and try again.");
+      console.error("Vote attempted but contract is null or voting in progress.");
+      setError("Contract not initialized or voting in progress.");
       return;
     }
 
@@ -399,7 +388,19 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   };
 
-  // Manual retry for contract initialization
+  // Trigger confetti
+  useEffect(() => {
+    if (showConfetti) {
+      confetti({
+        particleCount: 200,
+        spread: 70,
+        origin: { y: 0.6 },
+        disableForReducedMotion: true,
+      });
+    }
+  }, [showConfetti]);
+
+  // Retry contract initialization
   const handleRetry = () => {
     console.log("Retrying contract initialization...");
     setError(null);
@@ -407,27 +408,211 @@ const Poll = memo(({ userName }: { userName: string }) => {
     initContract();
   };
 
-  // Calculate total votes for progress bar
+  // Calculate vote percentages
   const totalVotes = (voteCounts[pollItems[0]?.name] || 0) + (voteCounts[pollItems[1]?.name] || 0);
-  const option1Percentage =
-    totalVotes > 0 ? ((voteCounts[pollItems[0]?.name] || 0) / totalVotes) * 100 : 50;
-  const option2Percentage =
-    totalVotes > 0 ? ((voteCounts[pollItems[1]?.name] || 0) / totalVotes) * 100 : 50;
+  const option1Percentage = totalVotes > 0 ? ((voteCounts[pollItems[0]?.name] || 0) / totalVotes) * 100 : 50;
+  const option2Percentage = totalVotes > 0 ? ((voteCounts[pollItems[1]?.name] || 0) / totalVotes) * 100 : 50;
 
   if (!pollItems.length && !showFeedback) {
-    return <div className="text-center text-gray-500">Loading poll...</div>;
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-primary-500"></div>
+        <span className="ml-2 text-gray-600 dark:text-gray-300">Loading poll...</span>
+      </div>
+    );
   }
 
   if (showFeedback) {
     return (
-      <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-lg text-center">
-        {showConfetti && <Confetti recycle={false} numberOfPieces={200} />}
-        <p className="text-lg text-green-600 font-medium">Vote submitted! Loading new poll...</p>
+      <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg text-center">
+        <motion.p
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 0.3 }}
+          className="text-lg font-semibold text-success-600 dark:text-success-400"
+        >
+          Vote submitted! Loading new poll...
+        </motion.p>
       </div>
     );
   }
+
+  return (
+    <div className="max-w-md mx-auto p-6 bg-white dark:bg-gray-800 rounded-xl shadow-lg">
+      <header className="text-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-800 dark:text-gray-100 font-inter">MiniPoll: Monad Ecosystem</h1>
+        <p className="text-gray-600 dark:text-gray-300">Vote on your favorite dApps and share on Warpcast!</p>
+      </header>
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={question}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -20 }}
+          transition={{ duration: 0.3, ease: "easeInOut" }}
+        >
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-100 mb-6 text-center font-inter">
+            Hey {user?.displayName || userName}, {question}
+          </h2>
+          {networkError && (
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/50 rounded-lg text-center animate-pulse">
+              <p className="text-red-600 dark:text-red-300 font-medium">{networkError}</p>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
+                Try MetaMask for the best experience.
+              </p>
+            </div>
+          )}
+          {error && (
+            <div className="mb-4 p-4 bg-red-50 dark:bg-red-900/50 rounded-lg text-center animate-pulse">
+              <p className="text-red-600 dark:text-red-300 font-medium">{error}</p>
+              {retryCount < 3 && (
+                <button
+                  className="mt-2 px-4 py-2 bg-primary-500 text-white rounded-lg hover:bg-primary-600 transition-all duration-200"
+                  onClick={handleRetry}
+                  aria-label="Retry contract initialization"
+                >
+                  Retry
+                </button>
+              )}
+            </div>
+          )}
+          {(loading || isLoadingVotes) && (
+            <div className="flex items-center justify-center mb-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-t-2 border-b-2 border-primary-500"></div>
+              <span className="ml-2 text-primary-500 dark:text-primary-400">
+                {loading ? "Processing vote..." : "Loading votes..."}
+              </span>
+            </div>
+          )}
+          <div className="text-center mb-6">
+            {isWalletConnected ? (
+              <div className="flex flex-col items-center">
+                {user?.pfp ? (
+                  <Image
+                    src={user.pfp}
+                    alt="Profile picture"
+                    className="w-12 h-12 rounded-full mb-2 border-2 border-primary-500"
+                    width={48}
+                    height={48}
+                    onError={(e) => (e.currentTarget.src = "https://via.placeholder.com/48")}
+                  />
+                ) : (
+                  <Image
+                    src="https://via.placeholder.com/48"
+                    alt="Profile placeholder"
+                    className="w-12 h-12 rounded-full mb-2 border-2 border-primary-500"
+                    width={48}
+                    height={48}
+                  />
+                )}
+                <p className="text-sm text-gray-600 dark:text-gray-300">Warpcast ID: {user?.fid || "N/A"}</p>
+                {user?.username && <p className="text-sm text-gray-600 dark:text-gray-300">Username: {user.username}</p>}
+                {user?.displayName && (
+                  <p className="text-sm text-gray-600 dark:text-gray-300">Display Name: {user.displayName}</p>
+                )}
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Wallet: {account?.slice(0, 6)}...{account?.slice(-4)}
+                </p>
+                <p className="text-sm text-gray-600 dark:text-gray-300">
+                  Balance: {balance ? `${balance} MON` : "Loading..."}
+                </p>
+                <button
+                  className="mt-2 px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 hover:scale-105 transition-all duration-200"
+                  onClick={disconnectWallet}
+                  aria-label="Disconnect wallet"
+                >
+                  Disconnect Wallet
+                </button>
+              </div>
+            ) : (
+              <button
+                className={`px-4 py-2 rounded-lg text-white transition-all duration-200 font-medium hover:scale-105 ${
+                  isConnecting
+                    ? "bg-gray-400 cursor-not-allowed"
+                    : "bg-primary-500 hover:bg-primary-600"
+                }`}
+                onClick={() => setShowWalletModal(true)}
+                disabled={isConnecting}
+                aria-label="Connect wallet"
+              >
+                {isConnecting ? "Connecting..." : "Connect Wallet"}
+              </button>
+            )}
+          </div>
+          {showWalletModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+              <motion.div
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-xl max-w-sm w-full"
+              >
+                <h3 className="text-lg font-semibold mb-4 font-inter text-gray-800 dark:text-gray-100">
+                  Select Wallet
+                </h3>
+                <div className="space-y-2">
+                  {walletOptions.map((wallet) => (
+                    <button
+                      key={wallet.id}
+                      className={`w-full px-4 py-2 rounded-lg text-white font-medium transition-all duration-200 hover:scale-105 ${
+                        wallet.isDetected
+                          ? "bg-primary-500 hover:bg-primary-600"
+                          : "bg-gray-400 hover:bg-gray-500"
+                      }`}
+                      onClick={() => connectWallet(wallet)}
+                      disabled={isConnecting}
+                      aria-label={`Connect with ${wallet.name}`}
+                    >
+                      {wallet.name} {wallet.isDetected ? "(Detected)" : ""}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  className="mt-4 w-full px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-800 dark:text-gray-200 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-all duration-200"
+                  onClick={() => setShowWalletModal(false)}
+                  disabled={isConnecting}
+                  aria-label="Cancel wallet selection"
+                >
+                  Cancel
+                </button>
+              </motion.div>
+            </div>
+          )}
+          <div className="space-y-6">
+            {pollItems.map((item, index) => (
+              <div key={item.name}>
+                <button
+                  className={`w-full p-4 bg-primary-500 dark:bg-primary-600 text-white rounded-lg hover:bg-primary-600 dark:hover:bg-primary-700 hover:scale-105 transition-all duration-200 flex flex-col items-start disabled:bg-gray-400 disabled:cursor-not-allowed disabled:scale-100 shadow-md`}
+                  onClick={() => handleVote(item.name)}
+                  disabled={loading || !!networkError || !isWalletConnected || !contract || isVoting}
+                  aria-label={`Vote for ${item.name}`}
+                >
+                  <span className="text-lg font-semibold font-inter">{item.name}</span>
+                  <span className="text-sm text-gray-100">{item.description}</span>
+                  {voteCounts[item.name] !== undefined && (
+                    <span className="text-sm text-gray-100 mt-1">
+                      Votes: {voteCounts[item.name]} (
+                      {(index === 0 ? option1Percentage : option2Percentage).toFixed(1)}%)
+                    </span>
+                  )}
+                </button>
+                <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-3 mt-2">
+                  <motion.div
+                    className="bg-primary-600 dark:bg-primary-500 h-3 rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${index === 0 ? option1Percentage : option2Percentage}%` }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        </motion.div>
+      </AnimatePresence>
+    </div>
+  );
 });
 
-Poll.displayName = "Poll"; 
+Poll.displayName = "Poll";
 
 export default Poll;
