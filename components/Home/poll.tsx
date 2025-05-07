@@ -92,6 +92,8 @@ const Poll = memo(({ userName }: { userName: string }) => {
 
   useEffect(() => {
     console.log("Warpcast User Data:", user);
+    // Additional logging for PFP
+    console.log("User PFP URL:", user?.pfp);
   }, [user]);
 
   const detectWallets = useCallback(() => {
@@ -432,11 +434,16 @@ const Poll = memo(({ userName }: { userName: string }) => {
     );
   }
 
+  // Determine the profile picture URL with a fallback
+  const profilePicUrl = user?.pfp && typeof user.pfp === "string" && user.pfp.startsWith("http")
+    ? user.pfp
+    : "https://via.placeholder.com/56";
+
   return (
     <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-2xl border-2 border-blue-200/50">
       <div key={question} className="animate-fadeIn">
         <h1 className="text-3xl font-extrabold text-center mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text drop-shadow-lg animate-pulse">
-          Pick Your favourite projects buildinng on Monad
+        Pick Your favourite projects on Monad
         </h1>
         <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">
           Hey {user?.displayName || userName}, {question}
@@ -480,24 +487,17 @@ const Poll = memo(({ userName }: { userName: string }) => {
         <div className="text-center mb-6">
           {isWalletConnected ? (
             <div className="flex flex-col items-center bg-gradient-to-b from-gray-50 to-white p-4 rounded-lg shadow-lg">
-              {user?.pfp ? (
-                <Image
-                  src={user.pfp}
-                  alt="Profile"
-                  className="w-14 h-14 rounded-full mb-3 border-4 border-gradient-to-r from-blue-400 to-purple-400 shadow-lg transform hover:scale-110 transition-transform duration-200"
-                  width={56}
-                  height={56}
-                  onError={(e) => (e.currentTarget.src = "https://via.placeholder.com/56")}
-                />
-              ) : (
-                <Image
-                  src="https://via.placeholder.com/56"
-                  alt="Profile Placeholder"
-                  className="w-14 h-14 rounded-full mb-3 border-4 border-gradient-to-r from-blue-400 to-purple-400 shadow-lg transform hover:scale-110 transition-transform duration-200"
-                  width={56}
-                  height={56}
-                />
-              )}
+              <Image
+                src={profilePicUrl}
+                alt="Profile"
+                className="w-14 h-14 rounded-full mb-3 border-4 border-gradient-to-r from-blue-400 to-purple-400 shadow-lg transform hover:scale-110 transition-transform duration-200"
+                width={56}
+                height={56}
+                onError={(e) => {
+                  console.error("Failed to load profile picture, falling back to placeholder.");
+                  e.currentTarget.src = "https://via.placeholder.com/56";
+                }}
+              />
               <p className="text-sm text-gray-700 font-medium">Warpcast ID: {user?.fid || "N/A"}</p>
               {user?.username && <p className="text-sm text-gray-700 font-medium">Username: {user.username}</p>}
               {user?.displayName && <p className="text-sm text-gray-700 font-medium">Display Name: {user.displayName}</p>}
