@@ -64,13 +64,21 @@ interface WalletOption {
 
 const MONAD_TESTNET_CHAIN_ID = 10143;
 
-// Move supportedWallets outside the component to prevent re-creation on every render
 const supportedWallets: WalletOption[] = [
   { id: "metamask", name: "MetaMask", connector: injected({ target: "metaMask" }), isDetected: false },
   { id: "trustwallet", name: "Trust Wallet", connector: injected({ target: "trustWallet" }), isDetected: false },
   { id: "coinbase", name: "Coinbase Wallet", connector: coinbaseWallet({ appName: "MiniPoll" }), isDetected: false },
   { id: "other", name: "Other Injected Wallet", connector: injected(), isDetected: false },
 ];
+
+// Debounce utility
+function debounce(func: (...args: any[]) => void, wait: number) {
+  let timeout: NodeJS.Timeout;
+  return (...args: any[]) => {
+    clearTimeout(timeout);
+    timeout = setTimeout(() => func(...args), wait);
+  };
+}
 
 const Poll = memo(({ userName }: { userName: string }) => {
   console.log("Poll component rendered at:", new Date().toISOString());
@@ -93,6 +101,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
   const [voteCounts, setVoteCounts] = useState<{ [key: string]: number }>({});
   const [isLoadingVotes, setIsLoadingVotes] = useState<boolean>(false);
   const [showConfetti, setShowConfetti] = useState<boolean>(false);
+  const [isVoting, setIsVoting] = useState<boolean>(false);
 
   // Log user data to verify
   useEffect(() => {
@@ -123,7 +132,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
     });
     console.log("Detected wallets:", updatedWallets);
     setWalletOptions(updatedWallets);
-  }, []); // No dependencies since supportedWallets is now a constant
+  }, []);
 
   useEffect(() => {
     detectWallets();
@@ -213,7 +222,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   }, [isWalletConnected, initContract]);
 
-  // Fetch vote counts without debouncing
+  // Fetch vote counts
   const fetchVoteCounts = useCallback(async () => {
     if (!contract || !pollItems.length) {
       console.log("Cannot fetch vote counts: contract or pollItems not ready.");
@@ -246,25 +255,28 @@ const Poll = memo(({ userName }: { userName: string }) => {
     }
   }, [contract, pollItems, fetchVoteCounts]);
 
-  // Generate a new poll
-  const generatePoll = useCallback(() => {
-    console.log("Generating poll at:", new Date().toISOString());
-    const categories = [dApps];
-    const selectedCategory = categories[0];
-    const shuffledItems = [...selectedCategory].sort(() => Math.random() - 0.5);
-    const twoItems = shuffledItems.slice(0, 2);
+  // Generate a new poll with debounce
+  const generatePoll = useCallback(
+    debounce(() => {
+      console.log("Generating poll at:", new Date().toISOString());
+      const categories = [dApps];
+      const selectedCategory = categories[0];
+      const shuffledItems = [...selectedCategory].sort(() => Math.random() - 0.5);
+      const twoItems = shuffledItems.slice(0, 2);
 
-    const questionPool = comparisonQuestions.filter((q) => q.includes("dApp"));
-    const selectedQuestion = questionPool[Math.floor(Math.random() * questionPool.length)];
+      const questionPool = comparisonQuestions.filter((q) => q.includes("dApp"));
+      const selectedQuestion = questionPool[Math.floor(Math.random() * questionPool.length)];
 
-    console.log("Poll items:", twoItems, "Question:", selectedQuestion);
-    setPollItems(twoItems);
-    setQuestion(selectedQuestion);
-    setShowFeedback(false);
-    setError(null);
-    setVoteCounts({});
-    fetchVoteCounts();
-  }, [fetchVoteCounts]);
+      console.log("Poll items:", twoItems, "Question:", selectedQuestion);
+      setPollItems(twoItems);
+      setQuestion(selectedQuestion);
+      setShowFeedback(false);
+      setError(null);
+      setVoteCounts({});
+      fetchVoteCounts();
+    }, 1000),
+    [fetchVoteCounts]
+  );
 
   useEffect(() => {
     let isMounted = true;
@@ -344,12 +356,13 @@ const Poll = memo(({ userName }: { userName: string }) => {
 
   // Handle vote casting
   const handleVote = async (item: string) => {
-    if (!contract) {
-      console.error("Vote attempted but contract is null.");
-      setError("Contract not initialized. Please refresh and try again.");
+    if (!contract || isVoting) {
+      console.error("Vote attempted but contract is null or voting is in progress.");
+      setError("Contract not initialized or voting in progress. Please wait and try again.");
       return;
     }
 
+    setIsVoting(true);
     setLoading(true);
     setError(null);
 
@@ -375,10 +388,12 @@ const Poll = memo(({ userName }: { userName: string }) => {
       setTimeout(() => {
         setShowConfetti(false);
         generatePoll();
+        setIsVoting(false);
       }, 2000);
     } catch (error: any) {
       console.error("Error casting vote:", error);
       setError(`Failed to cast vote: ${error.message}`);
+      setIsVoting(false);
     } finally {
       setLoading(false);
     }
@@ -532,7 +547,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
               <button
                 className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
                 onClick={() => handleVote(pollItems[0].name)}
-                disabled={loading || !!networkError || !isWalletConnected || !contract}
+                disabled={loading || !!networkError || !isWalletConnected || !contract || isVoting}
               >
                 <span className="text-lg font-medium">{pollItems[0].name}</span>
                 <span className="text-sm text-gray-100">{pollItems[0].description}</span>
@@ -551,7 +566,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
               <button
                 className="w-full p-4 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-all duration-200 shadow-md flex flex-col items-start disabled:bg-gray-400"
                 onClick={() => handleVote(pollItems[1].name)}
-                disabled={loading || !!networkError || !isWalletConnected || !contract}
+                disabled={loading || !!networkError || !isWalletConnected || !contract || isVoting}
               >
                 <span className="text-lg font-medium">{pollItems[1].name}</span>
                 <span className="text-sm text-gray-100">{pollItems[1].description}</span>
@@ -573,7 +588,6 @@ const Poll = memo(({ userName }: { userName: string }) => {
   );
 });
 
-// Set display name for the memoized component
 Poll.displayName = "Poll";
 
 export default Poll;
