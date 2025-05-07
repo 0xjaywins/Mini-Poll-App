@@ -14,7 +14,6 @@ import {
 import { injected, coinbaseWallet } from "@wagmi/connectors";
 import { http } from "viem";
 import Image from "next/image";
-import Confetti from "react-confetti";
 
 // Monad Testnet chain configuration
 const monadTestnet = {
@@ -408,9 +407,25 @@ const Poll = memo(({ userName }: { userName: string }) => {
 
   if (showFeedback) {
     return (
-      <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-100 rounded-lg shadow-xl text-center">
-        <Confetti recycle={false} numberOfPieces={300} colors={["#3B82F6", "#16A34A", "#EF4444", "#FBBF24"]} />
-        <p className="text-lg text-green-600 font-semibold animate-bounce">
+      <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-100 rounded-lg shadow-xl text-center relative overflow-hidden">
+        <div className="absolute inset-0 pointer-events-none">
+          {[...Array(20)].map((_, i) => (
+            <span
+              key={i}
+              className="particle absolute rounded-full animate-particle"
+              style={{
+                backgroundColor: ["#3B82F6", "#16A34A", "#EF4444", "#FBBF24"][Math.floor(Math.random() * 4)],
+                width: `${Math.random() * 10 + 5}px`,
+                height: `${Math.random() * 10 + 5}px`,
+                left: `${Math.random() * 100}%`,
+                top: `${Math.random() * 100}%`,
+                animationDelay: `${Math.random() * 2}s`,
+                animationDuration: `${Math.random() * 2 + 1}s`,
+              }}
+            />
+          ))}
+        </div>
+        <p className="text-lg text-green-600 font-semibold animate-bounce relative z-10">
           Vote submitted! Loading new poll...
         </p>
       </div>
@@ -421,7 +436,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
     <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-2xl border-2 border-blue-200/50">
       <div key={question} className="animate-fadeIn">
         <h1 className="text-3xl font-extrabold text-center mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text drop-shadow-lg animate-pulse">
-          Monad Ecosystem: Mini Poll App, Vote Your Favorite dApps...
+          Monad Network: Mini Voting App, Pick Your Top dApps...
         </h1>
         <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">
           Hey {user?.displayName || userName}, {question}
