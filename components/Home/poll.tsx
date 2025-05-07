@@ -13,7 +13,6 @@ import {
 } from "@wagmi/core";
 import { injected, coinbaseWallet } from "@wagmi/connectors";
 import { http } from "viem";
-import Image from "next/image";
 
 // Monad Testnet chain configuration
 const monadTestnet = {
@@ -92,8 +91,8 @@ const Poll = memo(({ userName }: { userName: string }) => {
 
   useEffect(() => {
     console.log("Warpcast User Data:", user);
-    // Additional logging for PFP
     console.log("User PFP URL:", user?.pfp);
+    console.log("Is user.pfp a valid string?", user?.pfp && typeof user.pfp === "string" && user.pfp.startsWith("http"));
   }, [user]);
 
   const detectWallets = useCallback(() => {
@@ -443,7 +442,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
     <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-2xl border-2 border-blue-200/50">
       <div key={question} className="animate-fadeIn">
         <h1 className="text-3xl font-extrabold text-center mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text drop-shadow-lg animate-pulse">
-        Pick Your favourite projects on Monad
+          Monad Network: Mini Voting App, Pick Your Top dApps...
         </h1>
         <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">
           Hey {user?.displayName || userName}, {question}
@@ -487,14 +486,13 @@ const Poll = memo(({ userName }: { userName: string }) => {
         <div className="text-center mb-6">
           {isWalletConnected ? (
             <div className="flex flex-col items-center bg-gradient-to-b from-gray-50 to-white p-4 rounded-lg shadow-lg">
-              <Image
+              <img
                 src={profilePicUrl}
                 alt="Profile"
                 className="w-14 h-14 rounded-full mb-3 border-4 border-gradient-to-r from-blue-400 to-purple-400 shadow-lg transform hover:scale-110 transition-transform duration-200"
-                width={56}
-                height={56}
+                onLoad={() => console.log("Profile picture loaded successfully:", profilePicUrl)}
                 onError={(e) => {
-                  console.error("Failed to load profile picture, falling back to placeholder.");
+                  console.error("Failed to load profile picture:", profilePicUrl);
                   e.currentTarget.src = "https://via.placeholder.com/56";
                 }}
               />
