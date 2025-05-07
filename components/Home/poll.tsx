@@ -442,7 +442,7 @@ const Poll = memo(({ userName }: { userName: string }) => {
     <div className="max-w-md mx-auto p-6 bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-2xl border-2 border-blue-200/50">
       <div key={question} className="animate-fadeIn">
         <h1 className="text-3xl font-extrabold text-center mb-4 bg-gradient-to-r from-blue-600 to-purple-600 text-transparent bg-clip-text drop-shadow-lg animate-pulse">
-          Monad Network: Mini Voting App, Pick Your Top dApps...
+        Pick Your favourite projects buildinng on Monad
         </h1>
         <h2 className="text-2xl font-semibold text-gray-800 mb-4 text-center">
           Hey {user?.displayName || userName}, {question}
