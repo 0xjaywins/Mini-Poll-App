@@ -11,7 +11,7 @@ export async function GET() {
     frame: {
       version: "1",
       name: "Mini Poll App",
-      homeUrl: "https://mini-poll-app.vercel.app",
+      homeUrl: APP_URL,
       iconUrl: "https://mini-poll-app.vercel.app/images/icon.png",
       splashImageUrl: "https://mini-poll-app.vercel.app/images/splash.png",
       splashBackgroundColor: "#ffffff",
