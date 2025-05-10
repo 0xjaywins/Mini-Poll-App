@@ -24,7 +24,7 @@ export async function GET() {
       tagline: "Vote on fun polls!",
       ogTitle: "Mini Poll App",
       ogDescription: "Compare dApps, tokens, and NFTs in the Monad ecosystem within Warpcast.",
-      ogImageUrl: "https://mini-poll-app.vercel.app/images/og.png"
+      ogImageUrl: "https://mini-poll-app.vercel.app/opengraph-image.png"
     },
   };
 
